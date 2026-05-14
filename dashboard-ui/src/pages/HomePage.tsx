@@ -1,9 +1,9 @@
-import { useRef, type ChangeEvent } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 import { motion } from 'framer-motion'
-import { Search, Upload, Camera } from 'lucide-react'
-import { HeroScanOverlay } from '../components/hero/HeroScanOverlay'
-import { StatsRow } from '../components/stats/StatsRow'
+import { useNavigate } from 'react-router-dom'
+import { Camera, Radar, Search, ShieldCheck, Upload } from 'lucide-react'
 import type { ModelInfo, ScanResult, Stats } from '../api'
+import { HeroScanOverlay } from '../components/hero/HeroScanOverlay'
 
 type HomePageProps = {
   onImageUpload: (file: File) => Promise<void>
@@ -14,8 +14,21 @@ type HomePageProps = {
   modelInfo: ModelInfo | null
 }
 
-export function HomePage({ onImageUpload, onLiveDetection, loading, scanResult }: HomePageProps) {
+export function HomePage({ onImageUpload, onLiveDetection, loading }: HomePageProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMessage, setSearchMessage] = useState('Search sections like detection, history, crop health, reports')
+
+  const searchTargets = useMemo(() => [
+    { route: '/', label: 'Home', keywords: ['home', 'main', 'start', 'landing'] },
+    { route: '/detection', label: 'Detection', keywords: ['detection', 'detect', 'scan', 'upload', 'image', 'camera', 'live'] },
+    { route: '/dashboard', label: 'Dashboard', keywords: ['dashboard', 'stats', 'analytics', 'model', 'performance'] },
+    { route: '/history', label: 'History', keywords: ['history', 'previous', 'saved', 'records', 'scans'] },
+    { route: '/recommendations', label: 'Recommendations', keywords: ['recommendations', 'advice', 'actions', 'tips', 'treatment'] },
+    { route: '/crop-health', label: 'Crop Health', keywords: ['crop', 'health', 'vigor', 'stress', 'yield'] },
+    { route: '/project-overview', label: 'Project Overview', keywords: ['project', 'overview', 'about', 'info', 'details'] },
+  ], [])
 
   const handleFileClick = () => fileInputRef.current?.click()
 
@@ -24,24 +37,57 @@ export function HomePage({ onImageUpload, onLiveDetection, loading, scanResult }
     if (file) onImageUpload(file)
   }
 
+  const handleSearch = () => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) {
+      setSearchMessage('Type a section name, then press Enter')
+      return
+    }
+
+    const match = searchTargets.find((target) =>
+      target.label.toLowerCase().includes(query) ||
+      target.keywords.some((keyword) => keyword.includes(query) || query.includes(keyword)),
+    )
+
+    if (!match) {
+      setSearchMessage('No match found. Try home, detection, dashboard, history, recommendations, crop health, or project overview')
+      return
+    }
+
+    setSearchMessage(`Opening ${match.label}`)
+    navigate(match.route)
+  }
+
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      handleSearch()
+    }
+  }
+
   return (
     <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        backgroundImage: `linear-gradient(90deg, rgba(2, 8, 5, 0.96) 0%, rgba(2, 8, 5, 0.18) 42%, rgba(2, 8, 5, 0.00) 100%), url('/hero-cinematic.png')`,
-        backgroundSize: 'auto 100%',
-        backgroundPosition: 'center center',
+	      <div style={{
+	        position: 'absolute',
+	        inset: 0,
+        backgroundImage: `linear-gradient(90deg, rgba(2, 8, 5, 0.92) 0%, rgba(2, 8, 5, 0.30) 40%, rgba(2, 8, 5, 0.00) 70%), url('/hero-cinematic.png')`,
+        backgroundSize: '100% auto',
+        backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
-        zIndex: 0,
-      }} />
-
-      <div style={{ position: 'relative', zIndex: 1, minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 32, padding: '30px 40px 40px 56px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 280, padding: '12px 18px', borderRadius: 999, background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(34,197,94,0.18)', backdropFilter: 'blur(16px)' }}>
+	        zIndex: 0,
+	      }} />
+	      <div style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}>
+	        <HeroScanOverlay />
+	      </div>
+	      <div style={{ position: 'relative', zIndex: 2, minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 32, padding: '30px 40px 40px 56px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 7 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 280, padding: '12px 18px', borderRadius: 999, background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(34,197,94,0.18)', backdropFilter: 'blur(16px)' }}>
             <Search size={16} color='#a7f3d0' />
             <input
               placeholder='Search anything...'
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
               style={{
                 width: '100%',
                 background: 'transparent',
@@ -52,6 +98,27 @@ export function HomePage({ onImageUpload, onLiveDetection, loading, scanResult }
                 lineHeight: 1.6,
               }}
             />
+            <button
+              type="button"
+              onClick={handleSearch}
+              style={{
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+                color: '#86efac',
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+              }}
+            >
+              Go
+            </button>
+            </div>
+            <span style={{ paddingLeft: 18, color: 'rgba(187,247,208,0.62)', fontSize: 10.5, letterSpacing: '0.04em' }}>
+              {searchMessage}
+            </span>
           </div>
         </div>
 
@@ -69,7 +136,7 @@ export function HomePage({ onImageUpload, onLiveDetection, loading, scanResult }
                 for Smarter Farming
               </h1>
 
-              <p style={{ color: 'rgba(226,232,240,0.84)', fontSize: 15, lineHeight: 1.7, maxWidth: 500 }}>
+              <p style={{ color: 'rgba(187,247,208,0.82)', fontSize: 15, lineHeight: 1.7, maxWidth: 620, whiteSpace: 'nowrap' }}>
                 Detect weeds early, protect your crops, and increase your yield with the power of AI.
               </p>
 
@@ -84,60 +151,66 @@ export function HomePage({ onImageUpload, onLiveDetection, loading, scanResult }
                 <button
                   onClick={handleFileClick}
                   disabled={loading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '18px 26px',
-                    borderRadius: 18,
-                    border: '1px solid rgba(34,197,94,0.45)',
-                    background: 'linear-gradient(180deg, rgba(34,197,94,0.16), rgba(34,197,94,0.08))',
-                    color: '#f8fafc',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 18px 40px rgba(34,197,94,0.12)',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  }}
+                  className="cyber-action-btn cyber-action-btn-primary"
                 >
-                  <Upload size={18} color='#22c55e' />
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>Upload Image</div>
-                    <div style={{ fontSize: 11, color: 'rgba(226,232,240,0.72)' }}>JPG, PNG, WebP</div>
+                  <span className="cyber-action-icon"><Upload size={18} /></span>
+                  <div>
+                    <strong>Upload Image</strong>
                   </div>
                 </button>
 
                 <button
                   onClick={onLiveDetection}
                   disabled={loading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '18px 26px',
-                    borderRadius: 18,
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: 'rgba(20, 30, 24, 0.85)',
-                    color: '#f8fafc',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 14px 30px rgba(0,0,0,0.22)',
-                    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  }}
+                  className="cyber-action-btn cyber-action-btn-secondary"
                 >
-                  <Camera size={18} color='rgba(148,163,184,0.9)' />
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700 }}>Live Detection</div>
-                    <div style={{ fontSize: 11, color: 'rgba(226,232,240,0.72)' }}>Use Camera</div>
+                  <span className="cyber-action-icon"><Camera size={18} /></span>
+                  <div>
+                    <strong>Live Detection</strong>
                   </div>
                 </button>
               </div>
+
+              <div className="assistant-lower-dock">
+                <div className="assistant-hero-wrap" aria-hidden="true">
+                  <span className="assistant-spiral-core" />
+                  <img className="assistant-hero-img" src="/clock-assistant.png" alt="" />
+                </div>
+
+                <motion.div
+                  className="assistant-info-card glass"
+                  initial={{ opacity: 0, x: 14 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.16 }}
+                >
+                  <div className="assistant-card-scanline" />
+                  <header>
+                    <span>READY</span>
+                    <strong>Guide</strong>
+                  </header>
+                  <div className="assistant-guide-steps">
+                    <div>
+                      <span><Upload size={12} /></span>
+                      <strong>Upload</strong>
+                    </div>
+                    <div>
+                      <span><Radar size={12} /></span>
+                      <strong>Run AI Scan</strong>
+                    </div>
+                    <div>
+                      <span><ShieldCheck size={12} /></span>
+                      <strong>Review Report</strong>
+                    </div>
+                  </div>
+                </motion.div>
+
+              </div>
+
             </div>
           </motion.div>
 
-          <div style={{ position: 'relative', minHeight: 520, width: '100%', minWidth: 260 }}>
-            <HeroScanOverlay />
-          </div>
         </div>
 
-        <StatsRow metrics={scanResult?.metrics} />
       </div>
     </div>
   )

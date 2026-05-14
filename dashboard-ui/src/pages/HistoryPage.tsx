@@ -1,14 +1,18 @@
 import { motion } from 'framer-motion'
-import type { HistoryEntry } from '../api'
+import { Trash2 } from 'lucide-react'
+import type { HistoryEntry, SampleImage } from '../api'
 
 type HistoryPageProps = {
   history: HistoryEntry[]
-  sampleImages: string[]
-  onSelectSampleImage: (filename: string) => Promise<void>
+  sampleImages: SampleImage[]
+  onSelectSampleImage: (sample: SampleImage) => Promise<void>
+  onClearHistory: () => Promise<void>
   loading: boolean
 }
 
-export function HistoryPage({ history, sampleImages, onSelectSampleImage, loading }: HistoryPageProps) {
+export function HistoryPage({ history, sampleImages, onSelectSampleImage, onClearHistory, loading }: HistoryPageProps) {
+  const getHistoryThumb = (entry: HistoryEntry) => entry.result_thumb || entry.original_thumb || ''
+
   return (
     <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: '32px 44px 32px 92px' }}>
       <div style={{ display: 'grid', gap: 24 }}>
@@ -16,7 +20,7 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, loadin
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="glass"
+          className="glass glow-green-strong"
           style={{ padding: 28, borderRadius: 32 }}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
@@ -36,12 +40,12 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, loadin
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.05 }}
-          className="glass"
+          className="glass glow-green-strong"
           style={{ padding: 28, borderRadius: 32 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
             <div>
-              <p style={{ margin: 0, color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Sample test images</p>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Curated sample images</p>
               <h2 style={{ margin: '10px 0 0', color: '#fff', fontSize: 24 }}>Load a sample field instantly</h2>
             </div>
             <span style={{ color: '#22c55e', fontSize: 12 }}>{loading ? 'Loading sample images…' : `${sampleImages.length} available`}</span>
@@ -49,33 +53,36 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, loadin
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 16 }}>
             {sampleImages.length === 0 ? (
-              <div style={{ padding: 24, borderRadius: 24, background: 'rgba(255,255,255,0.04)', color: '#94a3b8' }}>
+              <div className="glass glow-green-sm" style={{ padding: 24, borderRadius: 24, color: '#94a3b8' }}>
                 No sample images available. Make sure backend is running and sample data exists.
               </div>
-            ) : sampleImages.slice(0, 18).map((filename) => (
+            ) : sampleImages.slice(0, 25).map((sample) => (
               <button
-                key={filename}
+                key={sample.filename}
                 type="button"
-                onClick={() => onSelectSampleImage(filename)}
+                onClick={() => onSelectSampleImage(sample)}
                 disabled={loading}
+                className="glass glow-green-sm"
                 style={{
                   cursor: loading ? 'not-allowed' : 'pointer',
-                  border: '1px solid rgba(34,197,94,0.12)',
                   borderRadius: 24,
                   overflow: 'hidden',
-                  background: 'rgba(255,255,255,0.04)',
                   padding: 0,
                   minHeight: 170,
                   display: 'grid',
+
                 }}
               >
                 <img
-                  src={`/test-image/${encodeURIComponent(filename)}`}
-                  alt={filename}
+                  src={sample.url}
+                  alt={sample.label}
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none'
+                  }}
                   style={{ width: '100%', height: 140, objectFit: 'cover' }}
                 />
                 <div style={{ padding: '12px 14px', textAlign: 'left' }}>
-                  <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{filename}</p>
+                  <p style={{ margin: 0, color: '#fff', fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sample.label}</p>
                   <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: 12 }}>Tap to analyze</p>
                 </div>
               </button>
@@ -87,7 +94,7 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, loadin
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.1 }}
-          className="glass"
+          className="glass glow-green-strong"
           style={{ padding: 28, borderRadius: 32 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 22 }}>
@@ -95,12 +102,43 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, loadin
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.14em' }}>History timeline</p>
               <h2 style={{ margin: '10px 0 0', color: '#fff', fontSize: 24 }}>Saved scan records</h2>
             </div>
-            <span style={{ color: '#22c55e', fontSize: 12 }}>{history.length ? 'Most recent first' : 'No history yet'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ color: '#22c55e', fontSize: 12 }}>{loading ? 'Loading history...' : history.length ? 'Most recent first' : 'No history yet'}</span>
+              {history.length > 0 && (
+                <motion.button
+                  onClick={onClearHistory}
+                  disabled={loading}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 12,
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#ef4444',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    opacity: loading ? 0.6 : 1,
+                  }}
+                >
+                  <Trash2 size={14} />
+                  Clear History
+                </motion.button>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'grid', gap: 16 }}>
-            {history.length === 0 ? (
-              <div style={{ padding: 24, borderRadius: 24, background: 'rgba(255,255,255,0.04)', color: '#94a3b8' }}>
+            {loading && history.length === 0 ? (
+              <div className="glass glow-green-sm" style={{ padding: 24, borderRadius: 24, color: '#94a3b8' }}>
+                Loading saved scan records...
+              </div>
+            ) : history.length === 0 ? (
+              <div className="glass glow-green-sm" style={{ padding: 24, borderRadius: 24, color: '#94a3b8' }}>
                 Your scan history will appear here after the first detection.
               </div>
             ) : history.map((entry) => (
@@ -117,8 +155,11 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, loadin
                 }}
               >
                 <img
-                  src={entry.result_thumb}
+                  src={getHistoryThumb(entry)}
                   alt={`Scan ${entry.id}`}
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none'
+                  }}
                   style={{ width: '100%', minHeight: 110, maxHeight: 110, objectFit: 'cover', borderRadius: 20 }}
                 />
                 <div>

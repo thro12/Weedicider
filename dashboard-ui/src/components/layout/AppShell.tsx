@@ -1,73 +1,47 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Sidebar } from './Sidebar'
+import { Sidebar, type FarmerProfile } from './Sidebar'
 import { HomePage } from '../../pages/HomePage'
 import { ScanPage } from '../../pages/ScanPage'
 import { HistoryPage } from '../../pages/HistoryPage'
+import { DashboardPage } from '../../pages/DashboardPage'
+import { RecommendationsPage } from '../../pages/RecommendationsPage'
+import { CropHealthPage } from '../../pages/CropHealthPage'
+import { ProjectOverviewPage } from '../../pages/ProjectOverviewPage'
 import {
   exportPdfReport,
   fetchHistory,
   fetchModelInfo,
   fetchSampleImages,
   fetchStats,
+  resetMetrics,
   uploadImage,
 } from '../../api'
-import type { HistoryEntry, ModelInfo, ScanResult, Stats } from '../../api'
+import type { HistoryEntry, ModelInfo, SampleImage, ScanResult, Stats } from '../../api'
 
-const pageMeta: Record<string, { title: string; description: string }> = {
-  home: {
-    title: 'Home',
-    description: 'The cinematic WeedICider command center remains untouched while your navigation is now fully functional.',
-  },
-  detection: {
-    title: 'Scan Workspace',
-    description: 'Upload images, run live detection, and generate AI field reports with a transparent futuristic workspace.',
-  },
-  dashboard: {
-    title: 'Dashboard',
-    description: 'A compact command view for model statistics and session metrics.',
-  },
-  history: {
-    title: 'History',
-    description: 'Review past scans, timestamps, risk levels, and try sample field images.',
-  },
-  analytics: {
-    title: 'Analytics',
-    description: 'AI trend analysis for recent detection activity and confidence metrics.',
-  },
-  recommendations: {
-    title: 'Recommendations',
-    description: 'Actionable farming recommendations based on the latest scan output.',
-  },
-  crop: {
-    title: 'Crop Health',
-    description: 'Crop health insights generated from the detection engine.',
-  },
-  settings: {
-    title: 'Settings',
-    description: 'Scan and model configuration settings.',
-  },
+const DEFAULT_PROFILE: FarmerProfile = {
+  id: 'default',
+  name: 'Sumanth',
+  role: 'Farmer',
 }
 
-function PagePlaceholder({ title, description }: { title: string; description: string }) {
-  return (
-    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: '32px 44px 32px 92px' }}>
-      <div className="glass" style={{ padding: 28, borderRadius: 32 }}>
-        <h1 style={{ margin: 0, color: '#fff', fontSize: 32 }}>{title}</h1>
-        <p style={{ marginTop: 12, color: '#cbd5e1', lineHeight: 1.8 }}>{description}</p>
-        <div style={{ marginTop: 32, display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          <div style={{ padding: 22, borderRadius: 28, background: 'rgba(255,255,255,0.04)' }}>
-            <h2 style={{ color: '#d1fae5', marginBottom: 10 }}>Status</h2>
-            <p style={{ color: '#fff', lineHeight: 1.8 }}>This page is available and ready for future expansion while the main homepage remains unchanged.</p>
-          </div>
-          <div style={{ padding: 22, borderRadius: 28, background: 'rgba(255,255,255,0.04)' }}>
-            <h2 style={{ color: '#d1fae5', marginBottom: 10 }}>Navigation</h2>
-            <p style={{ color: '#94a3b8', lineHeight: 1.8 }}>Use the left sidebar icons to move between cinematic home, scanning, history, and analytic pages with the same green transparent theme.</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+const readStoredProfiles = (): FarmerProfile[] => {
+  try {
+    const raw = window.localStorage.getItem('weedicider.profiles')
+    const parsed = raw ? JSON.parse(raw) : null
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed
+        .filter((profile) => profile?.id && profile?.name)
+        .map((profile) => ({
+          id: String(profile.id),
+          name: String(profile.name),
+          role: String(profile.role || 'Farmer'),
+        }))
+    }
+  } catch {
+    // ignore invalid localStorage
+  }
+  return [DEFAULT_PROFILE]
 }
 
 export function AppShell() {
@@ -75,27 +49,53 @@ export function AppShell() {
   const navigate = useNavigate()
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
   const [history, setHistoryState] = useState<HistoryEntry[]>([])
   const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null)
-  const [sampleImages, setSampleImages] = useState<string[]>([])
+  const [sampleImages, setSampleImages] = useState<SampleImage[]>([])
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [pendingLive, setPendingLive] = useState(false)
+  const [profiles, setProfiles] = useState<FarmerProfile[]>(readStoredProfiles)
+  const [activeProfileId, setActiveProfileId] = useState(() => {
+    try {
+      return window.localStorage.getItem('weedicider.activeProfile') || DEFAULT_PROFILE.id
+    } catch {
+      return DEFAULT_PROFILE.id
+    }
+  })
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [profileModalOpen, setProfileModalOpen] = useState(false)
+  const [newProfileName, setNewProfileName] = useState('')
 
   const activeNav = useMemo(() => {
     const path = location.pathname.split('/')[1]
     return path === '' ? 'home' : path
   }, [location.pathname])
 
+  const activeProfile = useMemo(() => {
+    return profiles.find((profile) => profile.id === activeProfileId) || profiles[0] || DEFAULT_PROFILE
+  }, [activeProfileId, profiles])
+
+  useEffect(() => {
+    window.localStorage.setItem('weedicider.profiles', JSON.stringify(profiles))
+  }, [profiles])
+
+  useEffect(() => {
+    window.localStorage.setItem('weedicider.activeProfile', activeProfile.id)
+  }, [activeProfile.id])
+
   useEffect(() => {
     void loadStats()
     void loadHistory()
     void loadModelInfo()
     void loadSampleImages()
-  }, [])
+  }, [activeProfile.id])
 
   const loadStats = async () => {
     try {
-      const data = await fetchStats()
+      const data = await fetchStats(activeProfile.id)
       setStats(data)
     } catch {
       // ignore
@@ -103,11 +103,14 @@ export function AppShell() {
   }
 
   const loadHistory = async () => {
+    setHistoryLoading(true)
     try {
-      const data = await fetchHistory()
+      const data = await fetchHistory(activeProfile.id)
       setHistoryState(data)
     } catch {
       // ignore
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -124,8 +127,13 @@ export function AppShell() {
     try {
       const data = await fetchSampleImages()
       setSampleImages(data)
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to load sample images. Ensure the backend is running and refresh the page.',
+      )
+      setSampleImages([])
     }
   }
 
@@ -139,7 +147,7 @@ export function AppShell() {
     setError(null)
 
     try {
-      const data = await uploadImage(file, options.confidence, options.imgsz)
+      const data = await uploadImage(file, options.confidence, options.imgsz, activeProfile)
       setScanResult(data)
       void navigate('/detection')
       await loadHistory()
@@ -152,22 +160,28 @@ export function AppShell() {
   }
 
   const handleImageUpload = async (file: File) => {
-    await handlePredict(file, { confidence: 0.25, imgsz: 640 })
+    setPendingFile(file)
+    setPendingLive(false)
+    setScanResult(null)
+    void navigate('/detection')
   }
 
-  const handleSelectSampleImage = async (filename: string) => {
+  const handleSelectSampleImage = async (sample: SampleImage) => {
     setLoading(true)
     setError(null)
 
     try {
-      const response = await fetch(`/test-image/${encodeURIComponent(filename)}`)
+      const response = await fetch(sample.url)
       if (!response.ok) {
         throw new Error('Unable to load sample image')
       }
 
       const blob = await response.blob()
-      const file = new File([blob], filename, { type: blob.type || 'image/jpeg' })
-      await handlePredict(file, { confidence: 0.25, imgsz: 640 })
+      const file = new File([blob], sample.label, { type: blob.type || 'image/jpeg' })
+      setPendingFile(file)
+      setPendingLive(false)
+      setScanResult(null)
+      navigate('/detection')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sample image load failed')
     } finally {
@@ -190,13 +204,95 @@ export function AppShell() {
   }
 
   const handleLiveDetection = () => {
+    setPendingFile(null)
+    setPendingLive(true)
+    setScanResult(null)
     setError(null)
     void navigate('/detection')
   }
 
+  const handleClearScanResult = () => {
+    setScanResult(null)
+  }
+
+  const clearPendingLaunch = () => {
+    setPendingFile(null)
+    setPendingLive(false)
+  }
+
+  const handleClearHistory = async () => {
+    setHistoryLoading(true)
+    try {
+      const resetStats = await resetMetrics(activeProfile.id)
+      setStats(resetStats)
+      setHistoryState([])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not clear history')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleRefreshDashboard = async () => {
+    setError(null)
+    setHistoryLoading(true)
+    try {
+      // Reset metrics first
+      await resetMetrics(activeProfileId)
+      // Then reload all data
+      await Promise.all([
+        loadStats(),
+        loadHistory(),
+        loadModelInfo(),
+        loadSampleImages(),
+      ])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not refresh dashboard')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  const handleSelectProfile = (profileId: string) => {
+    setActiveProfileId(profileId)
+    setScanResult(null)
+    setError(null)
+    setProfileMenuOpen(false)
+  }
+
+  const openCreateProfile = () => {
+    setNewProfileName('')
+    setProfileModalOpen(true)
+    setProfileMenuOpen(false)
+  }
+
+  const handleCreateProfile = () => {
+    const name = newProfileName.trim()
+    if (!name) return
+    const profile: FarmerProfile = {
+      id: `farmer-${Date.now()}`,
+      name,
+      role: 'Farmer',
+    }
+    setProfiles((current) => [...current, profile])
+    setActiveProfileId(profile.id)
+    setProfileModalOpen(false)
+    setNewProfileName('')
+    setScanResult(null)
+  }
+
   return (
     <div style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: '#020602' }}>
-      <Sidebar active={activeNav} onNav={handleNav} />
+      <Sidebar
+        active={activeNav}
+        onNav={handleNav}
+        profiles={profiles}
+        activeProfile={activeProfile}
+        profileMenuOpen={profileMenuOpen}
+        onToggleProfileMenu={() => setProfileMenuOpen((open) => !open)}
+        onSelectProfile={handleSelectProfile}
+        onCreateProfile={openCreateProfile}
+      />
 
       <div style={{ marginLeft: 72, flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', position: 'relative' }}>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
@@ -207,6 +303,53 @@ export function AppShell() {
           <div style={{ position: 'absolute', top: 24, right: 32, zIndex: 30, maxWidth: 420, padding: '14px 18px', borderRadius: 22, background: 'rgba(30, 41, 59, 0.92)', border: '1px solid rgba(34,197,94,0.24)', color: '#f8fafc', boxShadow: '0 18px 48px rgba(0,0,0,0.35)' }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Action required</p>
             <p style={{ marginTop: 8, color: '#cbd5e1', fontSize: 13, lineHeight: 1.6 }}>{error}</p>
+          </div>
+        )}
+
+        {profileModalOpen && (
+          <div style={{ position: 'absolute', inset: 0, zIndex: 80, display: 'grid', placeItems: 'center', background: 'rgba(0,0,0,0.52)' }}>
+            <div className="glass glow-green-strong" style={{ width: 'min(420px, calc(100vw - 40px))', padding: 24, borderRadius: 24, background: 'rgba(4, 12, 6, 0.96)' }}>
+              <p style={{ margin: 0, color: '#8ee5aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>New farmer profile</p>
+              <h2 style={{ margin: '10px 0 0', color: '#fff', fontSize: 24 }}>Add farmer</h2>
+              <p style={{ margin: '10px 0 0', color: '#94a3b8', fontSize: 13, lineHeight: 1.7 }}>
+                Scans, history, dashboard stats, crop health, and recommendations will be separated for the active farmer.
+              </p>
+              <input
+                value={newProfileName}
+                onChange={(event) => setNewProfileName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleCreateProfile()
+                }}
+                placeholder="Farmer name"
+                autoFocus
+                style={{
+                  width: '100%',
+                  marginTop: 18,
+                  padding: '13px 14px',
+                  borderRadius: 16,
+                  border: '1px solid rgba(34,197,94,0.28)',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: '#fff',
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                <button
+                  type="button"
+                  onClick={() => setProfileModalOpen(false)}
+                  style={{ padding: '11px 15px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.05)', color: '#cbd5e1', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateProfile}
+                  style={{ padding: '11px 15px', borderRadius: 14, border: '1px solid rgba(34,197,94,0.35)', background: 'rgba(34,197,94,0.18)', color: '#d1fae5', cursor: 'pointer', fontWeight: 800 }}
+                >
+                  Add farmer
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -231,8 +374,13 @@ export function AppShell() {
                 <ScanPage
                   onPredict={handlePredict}
                   onDownloadReport={handleDownloadReport}
+                  onClearResult={handleClearScanResult}
                   loading={loading}
                   scanResult={scanResult}
+                  stats={stats}
+                  initialFile={pendingFile}
+                  initialLive={pendingLive}
+                  onInitialReady={clearPendingLaunch}
                 />
               }
             />
@@ -243,15 +391,18 @@ export function AppShell() {
                   history={history}
                   sampleImages={sampleImages}
                   onSelectSampleImage={handleSelectSampleImage}
-                  loading={loading}
+                  onClearHistory={handleClearHistory}
+                  loading={loading || historyLoading}
                 />
               }
             />
-            <Route path="/dashboard" element={<PagePlaceholder title={pageMeta.dashboard.title} description={pageMeta.dashboard.description} />} />
-            <Route path="/analytics" element={<PagePlaceholder title={pageMeta.analytics.title} description={pageMeta.analytics.description} />} />
-            <Route path="/recommendations" element={<PagePlaceholder title={pageMeta.recommendations.title} description={pageMeta.recommendations.description} />} />
-            <Route path="/crop" element={<PagePlaceholder title={pageMeta.crop.title} description={pageMeta.crop.description} />} />
-            <Route path="/settings" element={<PagePlaceholder title={pageMeta.settings.title} description={pageMeta.settings.description} />} />
+            <Route path="/dashboard" element={<DashboardPage stats={stats} history={history} modelInfo={modelInfo} loading={loading || historyLoading} onRefresh={handleRefreshDashboard} />} />
+            <Route path="/analytics" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/recommendations" element={<RecommendationsPage history={history} loading={loading} profileId={activeProfile.id} />} />
+            <Route path="/crop-health" element={<CropHealthPage history={history} loading={loading || historyLoading} profileId={activeProfile.id} />} />
+            <Route path="/crop" element={<Navigate to="/crop-health" replace />} />
+            <Route path="/project-overview" element={<ProjectOverviewPage stats={stats} history={history} modelInfo={modelInfo} />} />
+            <Route path="/settings" element={<Navigate to="/project-overview" replace />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

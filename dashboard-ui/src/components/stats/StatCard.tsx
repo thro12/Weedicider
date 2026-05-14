@@ -30,9 +30,9 @@ export function StatCard({
 
   return (
     <motion.article
-      whileHover={{ y: -4 }}
+      whileHover={{ y: -8 }}
       transition={{ type: 'spring', stiffness: 320, damping: 28 }}
-      className="group relative flex min-h-[150px] flex-col overflow-hidden rounded-[28px] border border-white/[0.08] bg-black/35 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.28)] backdrop-blur-2xl"
+      className="group relative flex min-h-[130px] flex-col overflow-hidden rounded-[28px] border-2 border-[#22c55e] bg-transparent p-4 shadow-[0_0_24px_rgba(34,197,94,0.4),inset_0_0_20px_rgba(34,197,94,0.1)] backdrop-blur-3xl"
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#39ff14]/30 to-transparent" />
 
