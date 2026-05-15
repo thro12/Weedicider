@@ -26,12 +26,12 @@ const mockHistory: HistoryEntry[] = [
     crops: 32,
     weeds: 13,
     total: 45,
-    confidence: 0.89,
+    confidence: 89,
     risk_level: 'medium',
     crop_pct: 71.1,
     weed_pct: 28.9,
-    original_thumb: 'https://picsum.photos/160/110?random=1',
-    result_thumb: 'https://picsum.photos/160/110?random=2',
+    original_thumb: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjgwIiB5PSI1NSIgZmlsbD0iI2ZmZiIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q3JvcDwvdGV4dD48L3N2Zz4=',
+    result_thumb: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjgwIiB5PSI1NSIgZmlsbD0iI2ZmZiIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q3JvcDwvdGV4dD48L3N2Zz4=',
     profile_id: 'default',
     profile_name: 'Demo User'
   },
@@ -43,12 +43,12 @@ const mockHistory: HistoryEntry[] = [
     crops: 15,
     weeds: 13,
     total: 28,
-    confidence: 0.82,
+    confidence: 82,
     risk_level: 'high',
     crop_pct: 53.6,
     weed_pct: 46.4,
-    original_thumb: 'https://picsum.photos/160/110?random=3',
-    result_thumb: 'https://picsum.photos/160/110?random=4',
+    original_thumb: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgZmlsbD0iI2VmNDQ0NCIvPjx0ZXh0IHg9IjgwIiB5PSI1NSIgZmlsbD0iI2ZmZiIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+V2VlZDwvdGV4dD48L3N2Zz4=',
+    result_thumb: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTYwIiBoZWlnaHQ9IjExMCIgZmlsbD0iI2VmNDQ0NCIvPjx0ZXh0IHg9IjgwIiB5PSI1NSIgZmlsbD0iI2ZmZiIgZm9udC1zaXplPSIxNCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+V2VlZDwvdGV4dD48L3N2Zz4=',
     profile_id: 'default',
     profile_name: 'Demo User'
   }
@@ -89,12 +89,12 @@ const mockSampleImages: SampleImage[] = [
   {
     filename: 'train/images/img113_jpg.rf.4592cdb90fe010c714a1c908676e8a1b.jpg',
     label: 'crop_heavy',
-    url: 'https://picsum.photos/640/480?random=5'
+    url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmaWxsPSIjZmZmIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Dcm9wIEhlYXZ5IFNhbXBsZTwvdGV4dD48L3N2Zz4='
   },
   {
     filename: 'train/images/weed_0_4388_jpeg.rf.2eaf42a08b9ca656a4fbc9b2d3f68307.jpg',
     label: 'weed_heavy',
-    url: 'https://picsum.photos/640/480?random=6'
+    url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgZmlsbD0iI2VmNDQ0NCIvPjx0ZXh0IHg9IjMyMCIgeT0iMjQwIiBmaWxsPSIjZmZmIiBmb250LXNpemU9IjI0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5XZWVkIEhlYXZ5IFNhbXBsZTwvdGV4dD48L3N2Zz4='
   }
 ]
 
