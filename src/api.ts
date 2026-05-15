@@ -30,8 +30,8 @@ const mockHistory: HistoryEntry[] = [
     risk_level: 'medium',
     crop_pct: 71.1,
     weed_pct: 28.9,
-    original_thumb: '/api/test-image/train/images/img113_jpg.rf.4592cdb90fe010c714a1c908676e8a1b.jpg',
-    result_thumb: '/api/test-image/train/images/img113_jpg.rf.4592cdb90fe010c714a1c908676e8a1b.jpg',
+    original_thumb: 'https://picsum.photos/160/110?random=1',
+    result_thumb: 'https://picsum.photos/160/110?random=2',
     profile_id: 'default',
     profile_name: 'Demo User'
   },
@@ -47,12 +47,32 @@ const mockHistory: HistoryEntry[] = [
     risk_level: 'high',
     crop_pct: 53.6,
     weed_pct: 46.4,
-    original_thumb: '/api/test-image/train/images/weed_0_4388_jpeg.rf.2eaf42a08b9ca656a4fbc9b2d3f68307.jpg',
-    result_thumb: '/api/test-image/train/images/weed_0_4388_jpeg.rf.2eaf42a08b9ca656a4fbc9b2d3f68307.jpg',
+    original_thumb: 'https://picsum.photos/160/110?random=3',
+    result_thumb: 'https://picsum.photos/160/110?random=4',
     profile_id: 'default',
     profile_name: 'Demo User'
   }
 ]
+
+// Helper functions for localStorage persistence
+const getStoredHistory = (): HistoryEntry[] => {
+  try {
+    const raw = window.localStorage.getItem('weedicider.history')
+    return raw ? JSON.parse(raw) : mockHistory
+  } catch {
+    return mockHistory
+  }
+}
+
+const getStoredStats = (profileId?: string): Stats => {
+  const key = profileId ? `weedicider.stats.${profileId}` : 'weedicider.stats'
+  try {
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : mockStats
+  } catch {
+    return mockStats
+  }
+}
 
 const mockModelInfo: ModelInfo = {
   name: 'YOLOv8 Small',
@@ -69,12 +89,12 @@ const mockSampleImages: SampleImage[] = [
   {
     filename: 'train/images/img113_jpg.rf.4592cdb90fe010c714a1c908676e8a1b.jpg',
     label: 'crop_heavy',
-    url: '/api/test-image/train/images/img113_jpg.rf.4592cdb90fe010c714a1c908676e8a1b.jpg'
+    url: 'https://picsum.photos/640/480?random=5'
   },
   {
     filename: 'train/images/weed_0_4388_jpeg.rf.2eaf42a08b9ca656a4fbc9b2d3f68307.jpg',
     label: 'weed_heavy',
-    url: '/api/test-image/train/images/weed_0_4388_jpeg.rf.2eaf42a08b9ca656a4fbc9b2d3f68307.jpg'
+    url: 'https://picsum.photos/640/480?random=6'
   }
 ]
 
@@ -87,7 +107,7 @@ const apiCallWithFallback = async <T>(apiCall: () => Promise<T>, mockData: T): P
     return await apiCall()
   } catch (error) {
     console.warn('API call failed, using mock data:', error)
-    await delay(500) // Simulate network delay
+    await delay(100) // Simulate minimal network delay
     return mockData
   }
 }
@@ -276,10 +296,10 @@ export const uploadImage = async (
   file: File,
   _confidence = 0.25,
   _imgsz = 640,
-  _profile?: { id: string; name: string },
+  profile?: { id: string; name: string },
 ): Promise<ScanResult> => {
   // Simulate processing delay
-  await delay(2000)
+  await delay(500)
 
   // Create mock result based on filename or random
   const isWeedHeavy = file.name.toLowerCase().includes('weed') || Math.random() > 0.6
@@ -366,6 +386,39 @@ export const uploadImage = async (
     scan_id: `scan-${Date.now()}`
   }
 
+  // Add to history
+  const newEntry: HistoryEntry = {
+    id: mockResult.scan_id,
+    timestamp: new Date().toISOString(),
+    time_ago: 'Just now',
+    filename: file.name,
+    crops: mockResult.metrics.crops,
+    weeds: mockResult.metrics.weeds,
+    total: mockResult.metrics.total,
+    confidence: mockResult.metrics.avg_confidence * 100,
+    risk_level: mockResult.metrics.risk_level,
+    crop_pct: mockResult.metrics.crop_pct,
+    weed_pct: mockResult.metrics.weed_pct,
+    original_thumb: mockResult.original_thumb,
+    result_thumb: mockResult.image,
+    profile_id: profile?.id || 'default',
+    profile_name: profile?.name || 'Demo User'
+  }
+
+  const currentHistory = getStoredHistory()
+  currentHistory.unshift(newEntry)
+  window.localStorage.setItem('weedicider.history', JSON.stringify(currentHistory))
+
+  // Update stats
+  const profileId = profile?.id
+  const currentStats = getStoredStats(profileId)
+  currentStats.total_scans += 1
+  currentStats.total_weeds += mockResult.metrics.weeds
+  currentStats.total_crops += mockResult.metrics.crops
+  currentStats.avg_confidence = Math.round(((currentStats.avg_confidence * (currentStats.total_scans - 1)) + mockResult.metrics.avg_confidence) * 100) / 100
+  const statsKey = profileId ? `weedicider.stats.${profileId}` : 'weedicider.stats'
+  window.localStorage.setItem(statsKey, JSON.stringify(currentStats))
+
   return mockResult
 }
 
@@ -376,21 +429,30 @@ const profileParams = (profileId?: string) => (
 export const fetchStats = async (profileId?: string): Promise<Stats> => {
   return apiCallWithFallback(
     () => client.get('/api/stats', profileParams(profileId)).then(res => res.data),
-    mockStats
+    getStoredStats(profileId)
   )
 }
 
 export const resetMetrics = async (profileId?: string): Promise<Stats> => {
+  const resetStats = { ...mockStats }
+  const statsKey = profileId ? `weedicider.stats.${profileId}` : 'weedicider.stats'
+  window.localStorage.setItem(statsKey, JSON.stringify(resetStats))
+  
+  // Clear history for this profile
+  const currentHistory = getStoredHistory()
+  const filteredHistory = currentHistory.filter(entry => profileId && entry.profile_id !== profileId)
+  window.localStorage.setItem('weedicider.history', JSON.stringify(filteredHistory))
+  
   return apiCallWithFallback(
     () => client.post('/api/reset-metrics', null, profileParams(profileId)).then(res => res.data.stats),
-    mockStats
+    resetStats
   )
 }
 
 export const fetchHistory = async (profileId?: string): Promise<HistoryEntry[]> => {
   return apiCallWithFallback(
     () => client.get('/api/history', profileParams(profileId)).then(res => res.data),
-    mockHistory
+    getStoredHistory().filter(entry => !profileId || entry.profile_id === profileId)
   )
 }
 
