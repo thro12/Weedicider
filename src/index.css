@@ -756,6 +756,35 @@ body {
   }
 }
 
+.history-record-row {
+  grid-template-columns: minmax(120px, 160px) minmax(0, 1fr) minmax(120px, 220px);
+}
+
+@media (max-width: 720px) {
+  .history-record-row {
+    grid-template-columns: 1fr;
+  }
+
+  .history-record-row > img {
+    max-height: 180px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .cyber-action-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .assistant-lower-dock {
+    width: 100%;
+  }
+
+  .assistant-hero-wrap {
+    margin-left: 0;
+  }
+}
+
 
 .animate-scan { animation: scan-move 3s ease-in-out infinite; }
 .animate-scan-border { animation: scan-border-pulse 2s ease-in-out infinite; }

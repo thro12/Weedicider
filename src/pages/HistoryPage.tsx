@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { Trash2 } from 'lucide-react'
 import type { HistoryEntry, SampleImage } from '../api'
+import { getImageFallback } from '../api'
 
 type HistoryPageProps = {
   history: HistoryEntry[]
@@ -14,7 +15,7 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, onClea
   const getHistoryThumb = (entry: HistoryEntry) => entry.result_thumb || entry.original_thumb || ''
 
   return (
-    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: '32px 44px 32px 92px' }}>
+    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: 'clamp(22px, 3vw, 32px) clamp(18px, 4vw, 44px) clamp(28px, 4vw, 32px) clamp(24px, 5vw, 92px)' }}>
       <div style={{ display: 'grid', gap: 24 }}>
         <motion.section
           initial={{ opacity: 0, y: 20 }}
@@ -77,7 +78,7 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, onClea
                   src={sample.url}
                   alt={sample.label}
                   onError={(event) => {
-                    event.currentTarget.style.display = 'none'
+                    event.currentTarget.src = getImageFallback()
                   }}
                   style={{ width: '100%', height: 140, objectFit: 'cover' }}
                 />
@@ -144,9 +145,9 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, onClea
             ) : history.map((entry) => (
               <div
                 key={entry.id}
+                className="history-record-row"
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '160px 1fr 220px',
                   gap: 18,
                   padding: 18,
                   borderRadius: 24,
@@ -158,7 +159,7 @@ export function HistoryPage({ history, sampleImages, onSelectSampleImage, onClea
                   src={getHistoryThumb(entry)}
                   alt={`Scan ${entry.id}`}
                   onError={(event) => {
-                    event.currentTarget.style.display = 'none'
+                    event.currentTarget.src = getImageFallback()
                   }}
                   style={{ width: '100%', minHeight: 110, maxHeight: 110, objectFit: 'cover', borderRadius: 20 }}
                 />

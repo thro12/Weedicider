@@ -70,7 +70,7 @@ export function HomePage({ onImageUpload, onLiveDetection, loading }: HomePagePr
 	        position: 'absolute',
 	        inset: 0,
         backgroundImage: `linear-gradient(90deg, rgba(2, 8, 5, 0.92) 0%, rgba(2, 8, 5, 0.30) 40%, rgba(2, 8, 5, 0.00) 70%), url('/hero-cinematic.png')`,
-        backgroundSize: '100% auto',
+        backgroundSize: 'cover',
         backgroundPosition: 'center top',
         backgroundRepeat: 'no-repeat',
 	        zIndex: 0,
@@ -78,10 +78,10 @@ export function HomePage({ onImageUpload, onLiveDetection, loading }: HomePagePr
 	      <div style={{ position: 'absolute', inset: 0, zIndex: 1, pointerEvents: 'none' }}>
 	        <HeroScanOverlay />
 	      </div>
-	      <div style={{ position: 'relative', zIndex: 2, minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 32, padding: '30px 40px 40px 56px' }}>
+	      <div style={{ position: 'relative', zIndex: 2, minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 32, padding: 'clamp(22px, 3vw, 30px) clamp(18px, 4vw, 40px) clamp(28px, 4vw, 40px) clamp(22px, 5vw, 56px)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div style={{ display: 'grid', gap: 7 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 280, padding: '12px 18px', borderRadius: 999, background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(34,197,94,0.18)', backdropFilter: 'blur(16px)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: 'min(100%, 420px)', minWidth: 0, padding: '12px 18px', borderRadius: 999, background: 'rgba(0, 0, 0, 0.4)', border: '1px solid rgba(34,197,94,0.18)', backdropFilter: 'blur(16px)' }}>
             <Search size={16} color='#a7f3d0' />
             <input
               placeholder='Search anything...'
@@ -122,7 +122,7 @@ export function HomePage({ onImageUpload, onLiveDetection, loading }: HomePagePr
           </div>
         </div>
 
-        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'minmax(420px, 540px) 1fr', gap: 40, alignItems: 'start' }}>
+        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))', gap: 40, alignItems: 'start' }}>
           <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 520, position: 'relative', zIndex: 2 }}>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderRadius: 999, border: '1px solid rgba(34,197,94,0.28)', background: 'rgba(34,197,94,0.14)' }}>
@@ -136,7 +136,7 @@ export function HomePage({ onImageUpload, onLiveDetection, loading }: HomePagePr
                 for Smarter Farming
               </h1>
 
-              <p style={{ color: 'rgba(187,247,208,0.82)', fontSize: 15, lineHeight: 1.7, maxWidth: 620, whiteSpace: 'nowrap' }}>
+              <p style={{ color: 'rgba(187,247,208,0.82)', fontSize: 15, lineHeight: 1.7, maxWidth: 620 }}>
                 Detect weeds early, protect your crops, and increase your yield with the power of AI.
               </p>
 

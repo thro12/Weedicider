@@ -125,7 +125,7 @@ export function DashboardPage({ stats, history, modelInfo, loading, onRefresh }:
   const cropTotals = trendScans.map((entry) => entry.crops)
 
   return (
-    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: '32px 44px 32px 92px', color: '#d9f7dc' }}>
+    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: 'clamp(22px, 3vw, 32px) clamp(18px, 4vw, 44px) clamp(28px, 4vw, 32px) clamp(24px, 5vw, 92px)', color: '#d9f7dc' }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 18, justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ maxWidth: 680 }}>
           <p style={{ margin: 0, color: '#8ee5aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.16em' }}>Dashboard</p>
@@ -165,8 +165,8 @@ export function DashboardPage({ stats, history, modelInfo, loading, onRefresh }:
         <StatCard title="Average confidence" value={`${stats?.avg_confidence?.toFixed(0) ?? 0}%`} label="AI model accuracy" icon={<TrendingUp size={20} />} accent="rgba(34,197,94,0.16)" />
       </div>
 
-      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: '1.3fr 0.9fr', marginTop: 24 }}>
-        <div className="glass glow-green-strong" style={{ height: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', marginTop: 24 }}>
+        <div className="glass glow-green-strong" style={{ minHeight: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 18 }}>
             <div>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Scan trends</p>
@@ -184,7 +184,7 @@ export function DashboardPage({ stats, history, modelInfo, loading, onRefresh }:
           </div>
         </div>
 
-        <div className="glass glow-green-strong" style={{ height: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, display: 'flex', flexDirection: 'column', gap: 18, overflow: 'hidden' }}>
+        <div className="glass glow-green-strong" style={{ minHeight: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, display: 'flex', flexDirection: 'column', gap: 18, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Model health</p>
@@ -205,8 +205,8 @@ export function DashboardPage({ stats, history, modelInfo, loading, onRefresh }:
         </div>
       </div>
 
-      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: '1.3fr 0.9fr', marginTop: 24 }}> 
-        <div className="glass glow-green-strong" style={{ height: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', marginTop: 24 }}> 
+        <div className="glass glow-green-strong" style={{ minHeight: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20 }}>
             <div>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Recent scans</p>
@@ -250,7 +250,7 @@ export function DashboardPage({ stats, history, modelInfo, loading, onRefresh }:
           )}
         </div>
 
-        <div className="glass glow-green-strong" style={{ height: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, display: 'flex', flexDirection: 'column', gap: 18, overflow: 'hidden' }}>
+        <div className="glass glow-green-strong" style={{ minHeight: dashboardPanelHeight, borderRadius: 28, border: '1px solid rgba(34,197,94,0.18)', background: 'rgba(6, 14, 8, 0.78)', padding: 24, display: 'flex', flexDirection: 'column', gap: 18, overflow: 'hidden' }}>
           <div>
             <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Insights</p>
             <h2 style={{ margin: '10px 0 0', color: '#fff', fontSize: 22 }}>Actionable alerts</h2>

@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Local ML artifacts and generated runtime data
+*.pt
+/detect/
+/train/
+/valid/
+/test/
+/history.json
+/metrics.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

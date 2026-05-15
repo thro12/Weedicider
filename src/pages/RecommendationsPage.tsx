@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle, Clock, AlertTriangle, TrendingUp, IndianRupee, Calendar, Target, Leaf, Zap, BarChart3 } from 'lucide-react'
+import { CheckCircle, Clock, AlertTriangle, TrendingUp, IndianRupee, Calendar, Target, Leaf, Zap, BarChart3, Droplets, ShieldCheck, Sprout } from 'lucide-react'
 import type { HistoryEntry, RecommendationsResponse } from '../api'
 import { fetchRecommendations } from '../api'
 
@@ -32,7 +32,12 @@ function generateFallbackRecommendations(scanHistory: HistoryEntry[]): Recommend
 
   const latestScan = scanHistory[0]
   if (latestScan) {
-    const weedPct = latestScan.total > 0 ? Math.round((latestScan.weeds / latestScan.total) * 100) : 0
+    const weedPct = latestScan.weed_pct ?? (latestScan.total > 0 ? Math.round((latestScan.weeds / latestScan.total) * 100) : 0)
+    const cropPct = latestScan.crop_pct ?? (latestScan.total > 0 ? Math.round((latestScan.crops / latestScan.total) * 100) : 0)
+    const avgWeedPct = Math.round(scanHistory.reduce((sum, scan) => sum + (scan.weed_pct ?? (scan.total ? (scan.weeds / scan.total) * 100 : 0)), 0) / scanHistory.length)
+    const weedTrend = scanHistory.length > 1
+      ? weedPct - (scanHistory[1].weed_pct ?? (scanHistory[1].total ? (scanHistory[1].weeds / scanHistory[1].total) * 100 : weedPct))
+      : 0
 
     if (weedPct > 50) {
       recs.push({
@@ -64,20 +69,71 @@ function generateFallbackRecommendations(scanHistory: HistoryEntry[]): Recommend
         confidence: 85,
         status: 'pending'
       })
+    } else {
+      recs.push({
+        id: 'low_pressure_spot_scouting',
+        title: 'Targeted Spot Scouting',
+        description: 'Weed pressure is low, so keep treatment focused only on detected patches instead of applying broad intervention.',
+        priority: 'low',
+        category: 'scheduled',
+        estimated_cost: 25,
+        timeline: 'Within 7 days',
+        actions: ['Inspect detected zones', 'Remove isolated weeds', 'Avoid disturbing healthy crop rows'],
+        risk_level: 'Low',
+        potential_impact: 'Preserve crop health while reducing unnecessary treatment cost',
+        confidence: 82,
+        status: 'pending'
+      })
     }
+
+    recs.push({
+      id: 'crop_vigor_support',
+      title: cropPct >= 70 ? 'Maintain Crop Vigor' : 'Improve Crop Stand Density',
+      description: cropPct >= 70
+        ? `Crop coverage is ${cropPct}%, so prioritize nutrition consistency and avoid root-zone stress.`
+        : `Crop coverage is only ${cropPct}%, so the field needs density improvement and closer stress monitoring.`,
+      priority: cropPct >= 70 ? 'medium' : 'high',
+      category: 'scheduled',
+      estimated_cost: cropPct >= 70 ? 120 : 220,
+      timeline: cropPct >= 70 ? 'This week' : 'Within 48-72 hours',
+      actions: cropPct >= 70
+        ? ['Apply balanced fertilizer', 'Keep irrigation uniform', 'Re-scan after nutrient application']
+        : ['Check seedling gaps', 'Inspect nutrient deficiency signs', 'Plan gap filling where crop rows are thin'],
+      risk_level: cropPct >= 70 ? 'Medium' : 'High',
+      potential_impact: cropPct >= 70 ? 'Protect current yield potential' : 'Recover weak crop zones before weed competition increases',
+      confidence: Math.max(72, Math.min(96, latestScan.confidence || 84)),
+      status: 'pending'
+    })
+
+    recs.push({
+      id: 'irrigation_balance',
+      title: 'Irrigation Balance Check',
+      description: weedPct > 25
+        ? 'Weeds can consume water faster than young crops. Keep irrigation targeted to crop rows and avoid wetting weed-heavy margins.'
+        : 'Current weed pressure allows normal irrigation, but soil moisture should be checked before the next scan.',
+      priority: weedPct > 35 ? 'high' : 'medium',
+      category: 'preventive',
+      estimated_cost: 60,
+      timeline: 'Next irrigation cycle',
+      actions: ['Check soil moisture at root depth', 'Reduce water on weed-heavy edges', 'Record irrigation timing with scan results'],
+      risk_level: weedPct > 35 ? 'High' : 'Medium',
+      potential_impact: 'Reduce weed advantage and stabilize crop growth',
+      confidence: 86,
+      status: 'pending'
+    })
 
     recs.push({
       id: 'weekly_monitoring',
       title: 'Weekly Field Monitoring',
-      description: 'Regular scanning helps catch weed growth early and prevents infestations.',
-      priority: 'medium',
+      description: `Average weed pressure across saved scans is ${avgWeedPct}%. ${weedTrend > 5 ? 'Recent weed pressure is increasing, so shorten the scan interval.' : 'Continue regular scanning to confirm field stability.'}`,
+      priority: weedTrend > 5 ? 'high' : 'medium',
       category: 'scheduled',
       estimated_cost: 0,
-      timeline: 'Weekly',
-      actions: ['Scan field weekly', 'Track weed growth patterns', 'Log weather conditions'],
-      risk_level: 'Low',
-      potential_impact: 'Early detection prevents major issues',
-      confidence: 80,
+      timeline: weedTrend > 5 ? 'Every 3 days' : 'Weekly',
+      actions: ['Scan the same field section', 'Compare weed percentage trend', 'Log weather and irrigation conditions'],
+      risk_level: weedTrend > 5 ? 'High' : 'Low',
+      potential_impact: 'Early trend detection prevents major crop competition',
+      confidence: 88,
       status: 'pending'
     })
 
@@ -100,6 +156,21 @@ function generateFallbackRecommendations(scanHistory: HistoryEntry[]): Recommend
   return recs
 }
 
+const normalizeRecommendation = (rec: Partial<Recommendation> & { detail?: string }, index: number): Recommendation => ({
+  id: rec.id || `recommendation_${index}`,
+  title: rec.title || 'Crop Care Recommendation',
+  description: rec.description || rec.detail || 'Review recent scan results and apply targeted field action.',
+  priority: rec.priority || (index === 0 ? 'high' : 'medium'),
+  category: rec.category || (index === 0 ? 'immediate' : 'scheduled'),
+  status: rec.status || 'pending',
+  estimated_cost: Number(rec.estimated_cost ?? (index === 0 ? 150 : 75)),
+  timeline: rec.timeline || (index === 0 ? 'Within 48 hours' : 'This week'),
+  actions: Array.isArray(rec.actions) && rec.actions.length ? rec.actions : ['Inspect affected crop rows', 'Apply targeted field action', 'Re-scan after completion'],
+  risk_level: rec.risk_level || (index === 0 ? 'High' : 'Medium'),
+  potential_impact: rec.potential_impact || 'Improve crop health and reduce weed competition',
+  confidence: Number(rec.confidence ?? 84),
+})
+
 export function RecommendationsPage({ history, loading, profileId }: RecommendationsPageProps) {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([])
   const [recommendationsData, setRecommendationsData] = useState<RecommendationsResponse | null>(null)
@@ -121,10 +192,7 @@ export function RecommendationsPage({ history, loading, profileId }: Recommendat
       try {
         const data = await fetchRecommendations(profileId)
         setRecommendationsData(data)
-        const recsWithStatus = data.recommendations.map(rec => ({
-          ...rec,
-          status: 'pending' as const
-        }))
+        const recsWithStatus = data.recommendations.map((rec, index) => normalizeRecommendation(rec, index))
         setRecommendations(recsWithStatus)
       } catch (error) {
         console.error('Failed to fetch recommendations:', error)
@@ -147,8 +215,29 @@ export function RecommendationsPage({ history, loading, profileId }: Recommendat
     })
   }, [recommendations, filter, categoryFilter])
 
+  const cropPlan = useMemo(() => {
+    const latest = history[0]
+    const previous = history[1]
+    const cropPct = latest?.crop_pct ?? (latest?.total ? Math.round((latest.crops / latest.total) * 100) : 0)
+    const weedPct = latest?.weed_pct ?? (latest?.total ? Math.round((latest.weeds / latest.total) * 100) : 0)
+    const previousWeedPct = previous?.weed_pct ?? (previous?.total ? Math.round((previous.weeds / previous.total) * 100) : weedPct)
+    const weedDelta = Math.round((weedPct - previousWeedPct) * 10) / 10
+    const vigor = Math.max(0, Math.min(100, Math.round(cropPct * 0.75 + (latest?.confidence ?? 80) * 0.25 - weedPct * 0.2)))
+
+    return {
+      cropPct,
+      weedPct,
+      weedDelta,
+      vigor,
+      actionWindow: weedPct > 45 ? '24 hours' : weedPct > 20 ? '3 days' : '7 days',
+      focus: weedPct > 45 ? 'Emergency weed removal' : cropPct < 55 ? 'Crop stand recovery' : weedPct > 20 ? 'Targeted weed control' : 'Preventive crop care',
+      irrigation: weedPct > 30 ? 'Keep water focused on crop rows' : 'Maintain normal irrigation cycle',
+      nutrition: cropPct < 60 ? 'Prioritize nitrogen and gap recovery' : 'Maintain balanced nutrition',
+    }
+  }, [history])
+
   const stats = useMemo(() => {
-    if (recommendationsData) {
+    if (recommendationsData?.stats && recommendationsData?.analysis) {
       const completed = recommendations.filter(r => r.status === 'completed').length
       const pending = recommendations.filter(r => r.status === 'pending').length
       const highPriority = recommendations.filter(r => r.priority === 'high' || r.priority === 'critical').length
@@ -238,6 +327,48 @@ export function RecommendationsPage({ history, loading, profileId }: Recommendat
             AI-powered farming recommendations based on your field scans and crop health analysis
           </p>
         </div>
+
+        {history.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.08 }}
+            className="glass glow-green-sm"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: 18, marginBottom: 32, padding: 22, borderRadius: 28, background: 'rgba(8, 16, 10, 0.72)', border: '1px solid rgba(34,197,94,0.18)' }}
+          >
+            <div>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Crop recommendation plan</p>
+              <h2 style={{ margin: '8px 0 0', color: '#fff', fontSize: 24 }}>{cropPlan.focus}</h2>
+              <p style={{ margin: '12px 0 0', color: '#c8f1d7', fontSize: 14, lineHeight: 1.65 }}>
+                Latest scan shows {cropPlan.cropPct}% crop coverage and {cropPlan.weedPct}% weed pressure. Recommended action window is {cropPlan.actionWindow}.
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+              <div style={{ padding: 14, borderRadius: 18, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                <Sprout size={20} color="#86efac" />
+                <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: 11 }}>Crop vigor</p>
+                <p style={{ margin: '4px 0 0', color: '#fff', fontSize: 22, fontWeight: 800 }}>{cropPlan.vigor}%</p>
+              </div>
+              <div style={{ padding: 14, borderRadius: 18, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.18)' }}>
+                <Droplets size={20} color="#93c5fd" />
+                <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: 11 }}>Irrigation</p>
+                <p style={{ margin: '4px 0 0', color: '#dbeafe', fontSize: 13, fontWeight: 700 }}>{cropPlan.irrigation}</p>
+              </div>
+              <div style={{ padding: 14, borderRadius: 18, background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.18)' }}>
+                <ShieldCheck size={20} color="#fcd34d" />
+                <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: 11 }}>Nutrition</p>
+                <p style={{ margin: '4px 0 0', color: '#fef3c7', fontSize: 13, fontWeight: 800 }}>{cropPlan.nutrition}</p>
+              </div>
+              <div style={{ padding: 14, borderRadius: 18, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.18)' }}>
+                <TrendingUp size={20} color="#fecaca" />
+                <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: 11 }}>Weed trend</p>
+                <p style={{ margin: '4px 0 0', color: cropPlan.weedDelta > 0 ? '#fecaca' : '#bbf7d0', fontSize: 13, fontWeight: 800 }}>
+                  {cropPlan.weedDelta > 0 ? `+${cropPlan.weedDelta}% rising` : `${cropPlan.weedDelta}% stable`}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Stats Dashboard */}
         {recommendationsData && (

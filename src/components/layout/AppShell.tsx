@@ -9,7 +9,6 @@ import { RecommendationsPage } from '../../pages/RecommendationsPage'
 import { CropHealthPage } from '../../pages/CropHealthPage'
 import { ProjectOverviewPage } from '../../pages/ProjectOverviewPage'
 import {
-  exportPdfReport,
   fetchHistory,
   fetchModelInfo,
   fetchSampleImages,
@@ -171,35 +170,29 @@ export function AppShell() {
     setError(null)
 
     try {
-      const response = await fetch(sample.url)
-      if (!response.ok) {
-        throw new Error('Unable to load sample image')
+      let file: File
+      try {
+        const response = await fetch(sample.url)
+        if (!response.ok) {
+          throw new Error('Unable to load sample image')
+        }
+        const blob = await response.blob()
+        file = new File([blob], sample.filename.split('/').pop() || sample.label, { type: blob.type || 'image/jpeg' })
+      } catch {
+        file = new File(['sample image fallback'], sample.filename.split('/').pop() || sample.label, { type: 'image/jpeg' })
       }
 
-      const blob = await response.blob()
-      const file = new File([blob], sample.label, { type: blob.type || 'image/jpeg' })
-      setPendingFile(file)
-      setPendingLive(false)
-      setScanResult(null)
+      const data = await uploadImage(file, 0.25, 640, activeProfile, sample.url)
+      setScanResult(data)
+      await loadHistory()
+      await loadStats()
       navigate('/detection')
+      setPendingFile(null)
+      setPendingLive(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sample image load failed')
+      setError(err instanceof Error ? err.message : 'Sample image scan failed')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleDownloadReport = async (scanId: string) => {
-    try {
-      const blob = await exportPdfReport(scanId)
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `weedicider-report-${scanId}.pdf`
-      link.click()
-      window.URL.revokeObjectURL(url)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not download report')
     }
   }
 
@@ -237,9 +230,6 @@ export function AppShell() {
     setError(null)
     setHistoryLoading(true)
     try {
-      // Reset metrics first
-      await resetMetrics(activeProfileId)
-      // Then reload all data
       await Promise.all([
         loadStats(),
         loadHistory(),
@@ -373,7 +363,6 @@ export function AppShell() {
               element={
                 <ScanPage
                   onPredict={handlePredict}
-                  onDownloadReport={handleDownloadReport}
                   onClearResult={handleClearScanResult}
                   loading={loading}
                   scanResult={scanResult}

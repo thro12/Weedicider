@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Camera, Upload, Settings2, DownloadCloud, Scan, X } from 'lucide-react'
+import { Camera, Upload, Settings2, Scan, X, Power, Crosshair } from 'lucide-react'
 import type { ScanReport, ScanResult, Stats } from '../api'
 
 type ScanPageProps = {
   onPredict: (file: File, settings: { confidence: number; imgsz: number }) => Promise<void>
-  onDownloadReport: (scanId: string) => Promise<void>
   onClearResult: () => void
   loading: boolean
   scanResult: ScanResult | null
@@ -15,7 +14,63 @@ type ScanPageProps = {
   onInitialReady?: () => void
 }
 
-export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, scanResult, stats, initialFile, initialLive, onInitialReady }: ScanPageProps) {
+const detectionStyle = (className: string) => {
+  const normalized = className.toLowerCase()
+  if (normalized.includes('weed')) {
+    return {
+      label: 'Weed',
+      color: '#ef4444',
+      background: 'rgba(239,68,68,0.16)',
+      border: 'rgba(248,113,113,0.95)',
+    }
+  }
+
+  return {
+    label: 'Crop',
+    color: '#22c55e',
+    background: 'rgba(34,197,94,0.16)',
+    border: 'rgba(74,222,128,0.95)',
+  }
+}
+
+const normalizeBox = (bbox: number[], imageSize?: { width: number; height: number }) => {
+  const [x = 0, y = 0, third = 0, fourth = 0] = bbox
+  const width = imageSize?.width || 1
+  const height = imageSize?.height || 1
+  const valuesArePixels = Math.max(x, y, third, fourth) > 1
+
+  if (valuesArePixels) {
+    const looksLikeSize = third <= width * 0.5 && fourth <= height * 0.5
+    const isXYXY = !looksLikeSize && third > x && fourth > y
+    return {
+      left: (x / width) * 100,
+      top: (y / height) * 100,
+      width: ((isXYXY ? third - x : third) / width) * 100,
+      height: ((isXYXY ? fourth - y : fourth) / height) * 100,
+    }
+  }
+
+  const looksLikeNormalizedSize = third <= 0.35 && fourth <= 0.35
+  const isNormalizedXYXY = !looksLikeNormalizedSize && third > x && fourth > y && third <= 1 && fourth <= 1
+  return {
+    left: x * 100,
+    top: y * 100,
+    width: (isNormalizedXYXY ? third - x : third) * 100,
+    height: (isNormalizedXYXY ? fourth - y : fourth) * 100,
+  }
+}
+
+const targetCoordinate = (bbox: number[], imageSize?: { width: number; height: number }) => {
+  const width = imageSize?.width || 1
+  const height = imageSize?.height || 1
+  const box = normalizeBox(bbox, imageSize)
+  return {
+    x: Math.round(((box.left + box.width / 2) / 100) * width),
+    y: Math.round(((box.top + box.height / 2) / 100) * height),
+  }
+}
+
+export function ScanPage({ onPredict, onClearResult, loading, scanResult, stats, initialFile, initialLive, onInitialReady }: ScanPageProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [confidence, setConfidence] = useState(0.25)
@@ -104,6 +159,12 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
     }
   }, [initialLive, startCamera])
 
+  useEffect(() => {
+    if (scanResult && !selectedFile && !cameraActive) {
+      setShowResult(true)
+    }
+  }, [scanResult, selectedFile, cameraActive])
+
   const capturePhoto = () => {
     if (!videoRef.current) return
     const video = videoRef.current
@@ -130,6 +191,16 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
   const currentReport: ScanReport | null = scanResult?.report ?? null
   const previewSource = selectedFile ? previewUrl : showResult ? scanResult?.original_thumb ?? null : null
   const resultSource = showResult && scanResult ? scanResult.image : null
+  const cropPct = scanResult?.metrics.crop_pct ?? 0
+  const weedPct = scanResult?.metrics.weed_pct ?? 0
+  const weedTargets = scanResult?.detections
+    .filter((detection) => detection.class.toLowerCase().includes('weed'))
+    .map((detection, index) => ({
+      index: index + 1,
+      confidence: Math.round(detection.confidence),
+      ...targetCoordinate(detection.bbox, scanResult.image_size),
+    })) ?? []
+  const motorActive = Boolean(scanResult && scanResult.metrics.weeds > 0)
 
   const summaryNarrative = scanResult ? [
     `AI analysis flagged ${scanResult.metrics.weeds} weed detections and ${scanResult.metrics.crops} crop detections across the uploaded field image.`,
@@ -147,21 +218,21 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
   ] : []
 
   return (
-    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: '32px 44px 32px 92px', color: '#d9f7dc' }}>
-      <div style={{ display: 'grid', gap: 24, gridTemplateColumns: '300px minmax(340px, 1fr) minmax(340px, 1fr)' }}>
-        <motion.div initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.55 }} className="glass glow-green" style={{ padding: 24, borderRadius: 28, display: 'flex', flexDirection: 'column', gap: 18, background: 'rgba(4, 12, 6, 0.72)', border: '1px solid rgba(34,197,94,0.22)' }}>
-          <div style={{ padding: 20, borderRadius: 28, background: 'rgba(12, 22, 12, 0.92)', border: '1px solid rgba(34,197,94,0.35)', boxShadow: '0 0 28px rgba(34,197,94,0.38), inset 0 0 16px rgba(34,197,94,0.12)' }}>
+    <div style={{ position: 'relative', height: '100%', overflowY: 'auto', padding: 'clamp(18px, 2.4vw, 28px) clamp(16px, 3vw, 34px) clamp(24px, 3vw, 30px) clamp(22px, 4vw, 76px)', color: '#d9f7dc' }}>
+      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
+        <motion.div initial={{ opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.55 }} className="glass glow-green" style={{ padding: 20, borderRadius: 24, display: 'flex', flexDirection: 'column', gap: 14, background: 'rgba(4, 12, 6, 0.72)', border: '1px solid rgba(34,197,94,0.22)' }}>
+          <div style={{ padding: 16, borderRadius: 22, background: 'rgba(12, 22, 12, 0.92)', border: '1px solid rgba(34,197,94,0.35)', boxShadow: '0 0 24px rgba(34,197,94,0.32), inset 0 0 14px rgba(34,197,94,0.12)' }}>
             <p style={{ margin: 0, color: '#8ee5aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.24em' }}>Total scans</p>
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 56, fontWeight: 800, lineHeight: 1, color: '#ffffff' }}>{stats?.total_scans ?? 0}</span>
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 46, fontWeight: 800, lineHeight: 1, color: '#ffffff' }}>{stats?.total_scans ?? 0}</span>
             </div>
-            <p style={{ marginTop: 10, color: '#9df8c5', fontSize: 13, opacity: 0.9 }}>All scans processed</p>
+            <p style={{ marginTop: 8, color: '#9df8c5', fontSize: 12, opacity: 0.9 }}>All scans processed</p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p style={{ marginBottom: 6, color: '#8ee5aa', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.16em' }}>Workspace</p>
-              <h2 style={{ color: '#f8fafc', fontSize: 24, margin: 0 }}>Scan workspace</h2>
+              <h2 style={{ color: '#f8fafc', fontSize: 21, margin: 0 }}>Scan workspace</h2>
             </div>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '8px 11px', borderRadius: 999, background: selectedFile ? 'rgba(34,197,94,0.14)' : 'rgba(148,163,184,0.08)', border: '1px solid rgba(34,197,94,0.18)', color: selectedFile ? '#a7f3d0' : '#94a3b8', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {selectedFile ? 'Ready' : cameraActive ? 'Camera' : 'Idle'}
@@ -179,11 +250,11 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
           <div style={{ display: 'grid', gap: 10 }}>
             <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Source</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <button type="button" onClick={handleUploadClick} className="glass glow-green-sm" style={{ display: 'grid', placeItems: 'center', gap: 8, minHeight: 82, padding: 12, borderRadius: 18, fontWeight: 800, color: '#f8fafc', border: '1px solid rgba(34,197,94,0.34)', background: 'rgba(34,197,94,0.13)', cursor: 'pointer' }}>
+              <button type="button" onClick={handleUploadClick} className="glass glow-green-sm" style={{ display: 'grid', placeItems: 'center', gap: 6, minHeight: 68, padding: 10, borderRadius: 16, fontWeight: 800, color: '#f8fafc', border: '1px solid rgba(34,197,94,0.34)', background: 'rgba(34,197,94,0.13)', cursor: 'pointer' }}>
                 <Upload size={21} />
                 <span style={{ fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Upload</span>
               </button>
-              <button type="button" onClick={cameraActive ? stopCamera : startCamera} disabled={cameraLoading} className="glass glow-green-sm" style={{ display: 'grid', placeItems: 'center', gap: 8, minHeight: 82, padding: 12, borderRadius: 18, fontWeight: 800, color: cameraActive ? '#fecdd3' : '#f8fafc', border: cameraActive ? '1px solid rgba(239,68,68,0.38)' : '1px solid rgba(34,197,94,0.28)', background: cameraActive ? 'rgba(239,68,68,0.14)' : 'rgba(34,197,94,0.1)', cursor: cameraLoading ? 'not-allowed' : 'pointer' }}>
+              <button type="button" onClick={cameraActive ? stopCamera : startCamera} disabled={cameraLoading} className="glass glow-green-sm" style={{ display: 'grid', placeItems: 'center', gap: 6, minHeight: 68, padding: 10, borderRadius: 16, fontWeight: 800, color: cameraActive ? '#fecdd3' : '#f8fafc', border: cameraActive ? '1px solid rgba(239,68,68,0.38)' : '1px solid rgba(34,197,94,0.28)', background: cameraActive ? 'rgba(239,68,68,0.14)' : 'rgba(34,197,94,0.1)', cursor: cameraLoading ? 'not-allowed' : 'pointer' }}>
                 <Camera size={21} />
                 <span style={{ fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{cameraActive ? 'Stop' : 'Camera'}</span>
               </button>
@@ -241,15 +312,15 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.08 }} className="glass glow-green" style={{ padding: 28, borderRadius: 32, minHeight: 620, position: 'relative', background: 'rgba(6, 14, 8, 0.72)', border: '1px solid rgba(34,197,94,0.22)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.08 }} className="glass glow-green" style={{ padding: 22, borderRadius: 26, minHeight: 430, position: 'relative', background: 'rgba(6, 14, 8, 0.72)', border: '1px solid rgba(34,197,94,0.22)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>Original</p>
-              <h3 style={{ margin: 0, color: '#fff' }}>Uploaded image</h3>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: 18 }}>Uploaded image</h3>
             </div>
             <span style={{ color: selectedFile ? '#a7f3d0' : '#6b7280', fontSize: 12 }}>{selectedFile ? 'Loaded' : 'Waiting for upload'}</span>
           </div>
-          <div style={{ minHeight: 460, borderRadius: 28, overflow: 'hidden', background: 'rgba(34,197,94,0.08)', display: 'grid', placeItems: 'center', border: '1px solid rgba(34,197,94,0.16)' }}>
+          <div style={{ minHeight: 300, height: 'clamp(300px, 40vh, 390px)', borderRadius: 22, overflow: 'hidden', background: 'rgba(34,197,94,0.08)', display: 'grid', placeItems: 'center', border: '1px solid rgba(34,197,94,0.16)' }}>
             {cameraActive ? (
               <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#07130b' }} />
             ) : previewSource ? (
@@ -258,21 +329,113 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.12 }} className="glass glow-green-sm" style={{ padding: 28, borderRadius: 32, minHeight: 620, display: 'flex', flexDirection: 'column', gap: 20, background: 'rgba(6, 14, 8, 0.72)', border: '1px solid rgba(34,197,94,0.22)' }}>
+        <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, delay: 0.12 }} className="glass glow-green-sm" style={{ padding: 22, borderRadius: 26, minHeight: 430, display: 'flex', flexDirection: 'column', gap: 14, background: 'rgba(6, 14, 8, 0.72)', border: '1px solid rgba(34,197,94,0.22)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.14em' }}>AI result</p>
-              <h3 style={{ margin: 0, color: '#fff' }}>Detection output</h3>
+              <h3 style={{ margin: 0, color: '#fff', fontSize: 18 }}>Detection output</h3>
             </div>
-            <button onClick={() => scanResult && onDownloadReport(scanResult.scan_id)} disabled={!scanResult} className="glass glow-green-sm" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 18, border: '1px solid rgba(34,197,94,0.35)', color: '#fff', background: scanResult ? 'rgba(34,197,94,0.18)' : 'rgba(34,197,94,0.08)', cursor: scanResult ? 'pointer' : 'not-allowed' }}>
-              <DownloadCloud size={16} /> Export PDF
-            </button>
+            <span style={{ color: scanResult ? '#a7f3d0' : '#6b7280', fontSize: 12 }}>{scanResult ? 'Analyzed' : 'Waiting for scan'}</span>
           </div>
-          <div style={{ minHeight: 460, borderRadius: 28, overflow: 'hidden', background: 'rgba(34,197,94,0.08)', position: 'relative', border: '1px solid rgba(34,197,94,0.16)' }}>
-            {resultSource ? <img src={resultSource} alt="Detection result" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} /> : null}
-            <div style={{ position: 'absolute', top: 20, right: 20, borderRadius: 20, padding: '10px 14px', background: 'rgba(0,0,0,0.48)', border: '1px solid rgba(34,197,94,0.2)' }}>
+          <div style={{ minHeight: 300, height: 'clamp(300px, 40vh, 390px)', borderRadius: 22, overflow: 'hidden', background: 'rgba(34,197,94,0.08)', position: 'relative', border: '1px solid rgba(34,197,94,0.16)', display: 'grid', placeItems: 'center' }}>
+            {resultSource ? (
+              <div style={{ position: 'relative', width: '100%', height: '100%', display: 'grid', placeItems: 'center' }}>
+                <img src={resultSource} alt="Detection result" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+                {scanResult?.detections.map((detection, index) => {
+                  const style = detectionStyle(detection.class)
+                  const box = normalizeBox(detection.bbox, scanResult.image_size)
+                  return (
+                    <div
+                      key={`${detection.class}-${index}`}
+                      style={{
+                        position: 'absolute',
+                        left: `${Math.max(0, Math.min(96, box.left))}%`,
+                        top: `${Math.max(0, Math.min(96, box.top))}%`,
+                        width: `${Math.max(4, Math.min(100 - box.left, box.width))}%`,
+                        height: `${Math.max(4, Math.min(100 - box.top, box.height))}%`,
+                        border: `2px solid ${style.border}`,
+                        background: style.background,
+                        boxShadow: `0 0 18px ${style.color}66, inset 0 0 12px ${style.color}33`,
+                        borderRadius: 6,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <span style={{ position: 'absolute', left: -2, top: -26, padding: '4px 8px', borderRadius: 8, background: style.color, color: '#04110a', fontSize: 10, fontWeight: 900, letterSpacing: '0.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                        {style.label} {Math.round(detection.confidence)}%
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+            <div style={{ position: 'absolute', top: 14, right: 14, borderRadius: 16, padding: '8px 12px', background: 'rgba(0,0,0,0.58)', border: '1px solid rgba(34,197,94,0.2)' }}>
               <p style={{ margin: 0, color: '#94a3b8', fontSize: 11 }}>Inference</p>
               <p style={{ margin: 0, color: '#d9f7dc', fontSize: 14 }}>{scanResult ? `${scanResult.metrics.inference_time_ms} ms` : 'Waiting'}</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <div style={{ padding: 14, borderRadius: 18, background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.24)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: '#d9f7dc', fontSize: 12, fontWeight: 800 }}>
+                <span>Crops</span>
+                <span>{scanResult ? `${scanResult.metrics.crops} (${cropPct}%)` : '0 (0%)'}</span>
+              </div>
+              <div style={{ marginTop: 10, height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ width: `${cropPct}%`, height: '100%', background: '#22c55e' }} />
+              </div>
+            </div>
+            <div style={{ padding: 14, borderRadius: 18, background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.24)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, color: '#fecdd3', fontSize: 12, fontWeight: 800 }}>
+                <span>Weeds</span>
+                <span>{scanResult ? `${scanResult.metrics.weeds} (${weedPct}%)` : '0 (0%)'}</span>
+              </div>
+              <div style={{ marginTop: 10, height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                <div style={{ width: `${weedPct}%`, height: '100%', background: '#ef4444' }} />
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
+            <div style={{ padding: 16, borderRadius: 20, background: motorActive ? 'rgba(239,68,68,0.14)' : 'rgba(34,197,94,0.1)', border: motorActive ? '1px solid rgba(248,113,113,0.34)' : '1px solid rgba(34,197,94,0.24)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 36, height: 36, borderRadius: 14, display: 'grid', placeItems: 'center', background: motorActive ? 'rgba(239,68,68,0.22)' : 'rgba(34,197,94,0.16)', color: motorActive ? '#fecdd3' : '#bbf7d0' }}>
+                    <Power size={18} />
+                  </span>
+                  <div>
+                    <p style={{ margin: 0, color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Motor state</p>
+                    <p style={{ margin: '5px 0 0', color: motorActive ? '#fecdd3' : '#bbf7d0', fontSize: 18, fontWeight: 900 }}>{motorActive ? 'Active' : 'Inactive'}</p>
+                  </div>
+                </div>
+                <span style={{ width: 10, height: 10, borderRadius: '50%', background: motorActive ? '#ef4444' : '#22c55e', boxShadow: motorActive ? '0 0 16px rgba(239,68,68,0.9)' : '0 0 16px rgba(34,197,94,0.75)' }} />
+              </div>
+              <p style={{ margin: '12px 0 0', color: '#c8f1d7', fontSize: 12, lineHeight: 1.5 }}>
+                {scanResult ? (motorActive ? 'Weed detected. Plucking motor can target the weed center points.' : 'No weeds detected. Plucking motor remains inactive.') : 'Run a scan to calculate motor state.'}
+              </p>
+            </div>
+
+            <div style={{ padding: 16, borderRadius: 20, background: 'rgba(10, 24, 12, 0.62)', border: '1px solid rgba(34,197,94,0.18)', minHeight: 122 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 36, height: 36, borderRadius: 14, display: 'grid', placeItems: 'center', background: 'rgba(34,197,94,0.14)', color: '#bbf7d0' }}>
+                  <Crosshair size={18} />
+                </span>
+                <div>
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Weed coordinates</p>
+                  <p style={{ margin: '5px 0 0', color: '#fff', fontSize: 18, fontWeight: 900 }}>{weedTargets.length} target{weedTargets.length === 1 ? '' : 's'}</p>
+                </div>
+              </div>
+              <div style={{ marginTop: 12, display: 'grid', gap: 8, maxHeight: 136, overflowY: 'auto' }}>
+                {weedTargets.length ? weedTargets.map((target) => (
+                  <div key={`${target.index}-${target.x}-${target.y}`} style={{ display: 'grid', gridTemplateColumns: '52px 1fr auto', gap: 8, alignItems: 'center', padding: '9px 10px', borderRadius: 14, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <span style={{ color: '#fecdd3', fontSize: 11, fontWeight: 900 }}>W{target.index}</span>
+                    <span style={{ color: '#d9f7dc', fontSize: 12, fontWeight: 800 }}>X {target.x} / Y {target.y}</span>
+                    <span style={{ color: '#94a3b8', fontSize: 11 }}>{target.confidence}%</span>
+                  </div>
+                )) : (
+                  <p style={{ margin: 0, color: '#94a3b8', fontSize: 12, lineHeight: 1.5 }}>
+                    {scanResult ? 'No weed target coordinates because weed count is zero.' : 'Coordinates will appear after weed detection.'}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </motion.div>
@@ -297,7 +460,7 @@ export function ScanPage({ onPredict, onDownloadReport, onClearResult, loading, 
               ))}
             </div>
 
-            <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', alignItems: 'stretch' }}>
+            <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', alignItems: 'stretch' }}>
               <div className="glass glow-green-sm" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 190, height: '100%', padding: 22, borderRadius: 28, background: 'rgba(8, 16, 10, 0.72)', border: '1px solid rgba(34,197,94,0.16)' }}>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em' }}>Crop health analysis</p>
                 <p style={{ margin: '16px 0 10px', color: '#c8f1d7', fontSize: 13 }}>{currentReport.crop_health_analysis.notes}</p>
