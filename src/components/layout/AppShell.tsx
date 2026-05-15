@@ -225,7 +225,7 @@ export function AppShell() {
     try {
       const resetStats = await resetMetrics(activeProfile.id)
       setStats(resetStats)
-      setHistoryState([])
+      await loadHistory()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not clear history')
     } finally {
