@@ -154,7 +154,7 @@ export function DashboardPage({ stats, history, modelInfo, loading, onRefresh }:
           }}
         >
           <BarChart3 size={18} />
-          {loading ? 'Refreshing...' : 'Refresh dashboard'}
+          {loading ? 'Resetting...' : 'Reset dashboard'}
         </button>
       </div>
 

@@ -230,9 +230,11 @@ export function AppShell() {
     setError(null)
     setHistoryLoading(true)
     try {
+      const resetStats = await resetMetrics(activeProfile.id)
+      setStats(resetStats)
+      setHistoryState([])
+      setScanResult(null)
       await Promise.all([
-        loadStats(),
-        loadHistory(),
         loadModelInfo(),
         loadSampleImages(),
       ])

@@ -623,11 +623,14 @@ export const resetMetrics = async (profileId?: string): Promise<Stats> => {
   const currentHistory = getStoredHistory()
   const filteredHistory = profileId ? currentHistory.filter(entry => entry.profile_id !== profileId) : []
   window.localStorage.setItem(STORAGE_HISTORY_KEY, JSON.stringify(filteredHistory))
-  
-  return apiCallWithFallback(
-    () => client.post('/api/reset-metrics', null, profileParams(profileId)).then(res => res.data.stats),
-    resetStats
-  )
+
+  try {
+    await client.post('/api/reset-metrics', null, profileParams(profileId))
+  } catch (error) {
+    console.warn('Reset metrics API failed, using local reset:', error)
+  }
+
+  return resetStats
 }
 
 export const fetchHistory = async (profileId?: string): Promise<HistoryEntry[]> => {
