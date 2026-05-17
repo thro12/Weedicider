@@ -12,6 +12,8 @@ const maxPerSplit = 40
 const candidateDirs = (split) => [
   path.join(root, split, 'images'),
   path.join(root, split),
+  path.join(parent, split, 'images'),
+  path.join(parent, split),
   path.join(parent, 'Combined_Dataset-2', split, 'images'),
   path.join(parent, 'Combined_Dataset-2', split),
   path.join(root, 'dataset', split, 'images'),

@@ -1,13 +1,23 @@
 import axios from 'axios'
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || ''
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '')
+const apiBaseUrl = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || '')
 
 const client = axios.create({
   baseURL: apiBaseUrl,
+  timeout: 60000,
   headers: {
     'Accept': 'application/json',
   },
 })
+
+client.interceptors.response.use(
+  response => response,
+  error => {
+    const message = error?.response?.data?.error || error?.message || 'API request failed'
+    return Promise.reject(new Error(message))
+  },
+)
 
 const STORAGE_HISTORY_KEY = 'weedicider.history'
 const STATS_KEY_PREFIX = 'weedicider.stats'
@@ -667,7 +677,7 @@ export const fetchSampleImages = async (): Promise<SampleImage[]> => {
   }))
 
   try {
-    const response = await fetch('/sample-images/manifest.json', { cache: 'no-cache' })
+    const response = await fetch(`${import.meta.env.BASE_URL}sample-images/manifest.json`, { cache: 'no-cache' })
     if (response.ok) {
       const samples = await response.json()
       if (Array.isArray(samples) && samples.length > 0) {
@@ -692,10 +702,11 @@ export const fetchBackendStatus = async (): Promise<BackendStatus> => {
     () => client.get('/api/backend-status').then(res => res.data),
     {
       status: 'demo_mode',
-      version: '1.0.0',
-      uptime_seconds: 3600,
-      model_loaded: true,
-      database_connected: false
+      model_loaded: false,
+      model_path: '',
+      loaded_classes: ['crop', 'weed'],
+      history_count: 0,
+      server_time: new Date().toISOString(),
     }
   )
 }

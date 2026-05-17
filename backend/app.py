@@ -3,48 +3,99 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
+import random
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.request import urlretrieve
 
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
-from ultralytics import YOLO
+
+try:
+    from ultralytics import YOLO
+except Exception:  # pragma: no cover - production can still run in demo mode without torch/ultralytics
+    YOLO = None
 
 
 ROOT = Path(__file__).resolve().parent
+REPO_ROOT = ROOT.parent
+DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "runtime")).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+MODEL_PATH_ENV = os.environ.get("MODEL_PATH")
+MODEL_URL = os.environ.get("MODEL_URL")
 MODEL_CANDIDATES = [
+    Path(MODEL_PATH_ENV).expanduser().resolve() if MODEL_PATH_ENV else None,
     ROOT / "Combined_Dataset_Yolov8_best.pt",
+    REPO_ROOT / "Combined_Dataset_Yolov8_best.pt",
     ROOT / "detect" / "train2" / "weights" / "best.pt",
     ROOT / "detect" / "train" / "weights" / "best.pt",
+    REPO_ROOT / "detect" / "train2" / "weights" / "best.pt",
+    REPO_ROOT / "detect" / "train" / "weights" / "best.pt",
 ]
-HISTORY_PATH = ROOT / "history.json"
-METRICS_PATH = ROOT / "metrics.json"
+MODEL_CANDIDATES = [path for path in MODEL_CANDIDATES if path is not None]
+MODEL_DOWNLOAD_PATH = DATA_DIR / "model.pt"
+HISTORY_PATH = DATA_DIR / "history.json"
+METRICS_PATH = DATA_DIR / "metrics.json"
 DATA_PATH = ROOT / "data.yaml"
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "16"))
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "ALLOWED_ORIGINS",
+        "*",
+    ).split(",")
+    if origin.strip()
+]
 
 app = Flask(__name__)
-CORS(app)
+app.config.update(
+    MAX_CONTENT_LENGTH=MAX_UPLOAD_MB * 1024 * 1024,
+    JSON_SORT_KEYS=False,
+)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": ALLOWED_ORIGINS or "*"}},
+    supports_credentials=False,
+)
 
-model: YOLO | None = None
+model: Any | None = None
 model_path: Path | None = None
+model_error: str | None = None
 
 
-def load_model() -> YOLO:
-    global model, model_path
+def load_model() -> Any | None:
+    global model, model_path, model_error
     if model is not None:
         return model
+    if YOLO is None:
+        model_error = "ultralytics is not available"
+        return None
 
-    for candidate in MODEL_CANDIDATES:
+    if MODEL_URL and not MODEL_DOWNLOAD_PATH.exists():
+        try:
+            urlretrieve(MODEL_URL, MODEL_DOWNLOAD_PATH)
+        except Exception as exc:
+            model_error = f"MODEL_URL download failed: {exc}"
+    candidates = [MODEL_DOWNLOAD_PATH, *MODEL_CANDIDATES]
+
+    for candidate in candidates:
         if candidate.exists():
-            model_path = candidate
-            model = YOLO(str(candidate))
-            return model
+            try:
+                model_path = candidate
+                model = YOLO(str(candidate))
+                model_error = None
+                return model
+            except Exception as exc:
+                model_error = f"Failed to load {candidate}: {exc}"
 
-    searched = ", ".join(str(path.name) for path in MODEL_CANDIDATES)
-    raise FileNotFoundError(f"No YOLO model found. Checked: {searched}")
+    searched = ", ".join(str(path) for path in candidates)
+    model_error = f"No YOLO model found. Checked: {searched}"
+    return None
 
 
 def read_json(path: Path, fallback: Any) -> Any:
@@ -57,6 +108,7 @@ def read_json(path: Path, fallback: Any) -> Any:
 
 
 def write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2))
 
 
@@ -111,6 +163,55 @@ def draw_detections(image: Image.Image, detections: list[dict[str, Any]]) -> Ima
         draw.text((x + 5, tag_y + 3), text, fill=(2, 12, 6), font=font)
 
     return annotated
+
+
+def generate_demo_detections(image: Image.Image, filename: str) -> list[dict[str, Any]]:
+    seed = sum(ord(char) for char in filename) + image.width + image.height
+    rng = random.Random(seed)
+    total = 8 + seed % 18
+    weed_heavy = "weed" in filename.lower() or seed % 4 == 0
+    weed_count = max(1, round(total * (0.55 if weed_heavy else 0.22)))
+    crop_count = max(1, total - weed_count)
+    labels = ["weed"] * weed_count + ["crop"] * crop_count
+    rng.shuffle(labels)
+
+    detections: list[dict[str, Any]] = []
+    for index, label in enumerate(labels):
+        width = rng.uniform(image.width * 0.08, image.width * 0.22)
+        height = rng.uniform(image.height * 0.08, image.height * 0.22)
+        x = rng.uniform(0, max(1, image.width - width))
+        y = rng.uniform(0, max(1, image.height - height))
+        base_confidence = 78 if label == "crop" else 74
+        detections.append({
+            "class": label,
+            "confidence": round(min(96, base_confidence + rng.uniform(0, 16)), 1),
+            "bbox": [round(x, 2), round(y, 2), round(width, 2), round(height, 2)],
+        })
+    return detections
+
+
+def run_detection(image: Image.Image, filename: str, confidence: float, imgsz: int) -> tuple[list[dict[str, Any]], str]:
+    detector = load_model()
+    if detector is None:
+        return generate_demo_detections(image, filename), "demo"
+
+    result = detector.predict(image, conf=confidence, imgsz=imgsz, verbose=False)[0]
+    names = result.names or {0: "crop", 1: "weed"}
+    detections: list[dict[str, Any]] = []
+
+    for box in result.boxes:
+        class_id = int(box.cls[0].item())
+        label = str(names.get(class_id, class_id)).lower()
+        if label not in {"crop", "weed"}:
+            label = "weed" if class_id == 1 else "crop"
+        x1, y1, x2, y2 = [float(value) for value in box.xyxy[0].tolist()]
+        detections.append({
+            "class": label,
+            "confidence": round(float(box.conf[0].item()) * 100, 1),
+            "bbox": [round(x1, 2), round(y1, 2), round(x2 - x1, 2), round(y2 - y1, 2)],
+        })
+
+    return detections, "model"
 
 
 def build_report(crops: int, weeds: int, total: int, confidence: float, risk: str) -> dict[str, Any]:
@@ -223,22 +324,25 @@ def compute_stats(profile_id: str | None = None) -> dict[str, Any]:
 
 @app.get("/api/backend-status")
 def backend_status():
-    loaded = model is not None
+    selected = next((path for path in [MODEL_DOWNLOAD_PATH, *MODEL_CANDIDATES] if path.exists()), None)
+    loaded = load_model() is not None
     return jsonify({
-        "status": "ready" if loaded or any(path.exists() for path in MODEL_CANDIDATES) else "model_missing",
+        "status": "ready" if loaded else "demo_mode",
         "model_loaded": loaded,
-        "model_path": str(model_path or next((path for path in MODEL_CANDIDATES if path.exists()), "")),
+        "model_path": str(model_path or selected or ""),
+        "model_error": model_error,
         "loaded_classes": ["crop", "weed"],
         "history_count": len(read_json(HISTORY_PATH, [])),
         "server_time": datetime.now(timezone.utc).isoformat(),
+        "data_dir": str(DATA_DIR),
     })
 
 
 @app.get("/api/model-info")
 def model_info():
-    selected = next((path for path in MODEL_CANDIDATES if path.exists()), None)
+    selected = next((path for path in [MODEL_DOWNLOAD_PATH, *MODEL_CANDIDATES] if path.exists()), None)
     return jsonify({
-        "name": selected.name if selected else "YOLOv8",
+        "name": selected.name if selected else "YOLOv8 demo mode",
         "architecture": "YOLOv8",
         "classes": ["crop", "weed"],
         "input_size": 640,
@@ -256,29 +360,15 @@ def predict():
 
     started = time.perf_counter()
     file_storage = request.files["file"]
-    confidence = float(request.form.get("confidence", 0.25))
-    imgsz = int(float(request.form.get("imgsz", 640)))
+    filename = file_storage.filename or "uploaded-image.jpg"
+    confidence = max(0.05, min(0.95, float(request.form.get("confidence", 0.25))))
+    imgsz = max(320, min(1280, int(float(request.form.get("imgsz", 640)))))
     profile_id = request.form.get("profile_id", "default")
     profile_name = request.form.get("profile_name", "Demo User")
 
     image = file_to_image(file_storage)
     original_data_url = image_to_data_url(image)
-    detector = load_model()
-    result = detector.predict(image, conf=confidence, imgsz=imgsz, verbose=False)[0]
-    names = result.names or {0: "crop", 1: "weed"}
-
-    detections: list[dict[str, Any]] = []
-    for box in result.boxes:
-        class_id = int(box.cls[0].item())
-        label = str(names.get(class_id, class_id)).lower()
-        if label not in {"crop", "weed"}:
-            label = "weed" if class_id == 1 else "crop"
-        x1, y1, x2, y2 = [float(value) for value in box.xyxy[0].tolist()]
-        detections.append({
-            "class": label,
-            "confidence": round(float(box.conf[0].item()) * 100, 1),
-            "bbox": [round(x1, 2), round(y1, 2), round(x2 - x1, 2), round(y2 - y1, 2)],
-        })
+    detections, detection_mode = run_detection(image, filename, confidence, imgsz)
 
     crop_count = sum(1 for item in detections if item["class"] == "crop")
     weed_count = sum(1 for item in detections if item["class"] == "weed")
@@ -305,6 +395,7 @@ def predict():
             "risk_level": risk,
         },
         "summary": f"Detected {crop_count} crops and {weed_count} weeds. Weed ratio is {pct(weed_count, total)}%.",
+        "mode": detection_mode,
         "recommendations": [
             {"icon": "target", "text": "Treat red-boxed weed clusters first."},
             {"icon": "leaf", "text": "Protect green-boxed crop zones during intervention."},
@@ -314,8 +405,14 @@ def predict():
         "image_size": {"width": image.width, "height": image.height},
         "scan_id": scan_id,
     }
-    persist_result(response, file_storage.filename or "uploaded-image.jpg", profile_id, profile_name)
+    persist_result(response, filename, profile_id, profile_name)
     return jsonify(response)
+
+
+@app.get("/api/sample-images")
+def sample_images():
+    manifest_path = REPO_ROOT / "frontend" / "public" / "sample-images" / "manifest.json"
+    return jsonify(read_json(manifest_path, []))
 
 
 @app.get("/api/history")
@@ -466,6 +563,34 @@ def export_report(scan_id: str):
     return send_file(buffer, mimetype="application/pdf", as_attachment=True, download_name=f"weedicider-report-{scan_id}.pdf")
 
 
+@app.get("/")
+def root():
+    return jsonify({"service": "WeedICider API", "status": "ok"})
+
+
+@app.get("/healthz")
+def healthz():
+    return jsonify({"status": "ok", "time": datetime.now(timezone.utc).isoformat()})
+
+
+@app.errorhandler(400)
+@app.errorhandler(404)
+@app.errorhandler(413)
+@app.errorhandler(500)
+def handle_http_error(error):
+    status_code = getattr(error, "code", 500)
+    message = "Uploaded file is too large" if status_code == 413 else getattr(error, "description", "Server error")
+    return jsonify({"error": message, "status": status_code}), status_code
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(error):
+    app.logger.exception("Unhandled API error")
+    return jsonify({"error": "Unexpected server error", "detail": str(error)}), 500
+
+
 if __name__ == "__main__":
     load_model()
-    app.run(host="127.0.0.1", port=5004, debug=True)
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
+    port = int(os.environ.get("PORT", "5004"))
+    app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=False)

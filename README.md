@@ -1,42 +1,95 @@
-# WeedICider — Futuristic AI farming dashboard (React + Tailwind + Framer Motion)
+# WeedICider
 
-Premium glassmorphism dashboard UI. The hero uses `public/hero-cinematic.png`.
+Production-ready React/Vite frontend and Flask API for crop/weed detection.
 
-## Setup
+## Folder Structure
 
-```bash
-npm install
-npm run dev
+```text
+.
+├── frontend/          # Vite React app for Vercel
+│   ├── public/        # Static images and sample dataset manifest
+│   ├── src/           # UI, routing, API client
+│   └── package.json
+├── backend/           # Flask API for Render
+│   ├── app.py
+│   ├── requirements.txt
+│   └── data.yaml
+├── vercel.json        # Vercel frontend build config
+├── render.yaml        # Render backend blueprint
+└── .env.example
 ```
 
-Open the URL Vite prints (usually `http://127.0.0.1:5173`).
+## Local Development
 
-## Backend model server
-
-The React app proxies `/api` to Flask on `http://127.0.0.1:5004`. Start the trained YOLO backend in a second terminal:
+Backend:
 
 ```bash
+cd backend
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python app.py
+. .venv/bin/activate
+pip install -r requirements.txt
+python app.py
 ```
 
-The backend loads `Combined_Dataset_Yolov8_best.pt` first, then falls back to `detect/train2/weights/best.pt` or `detect/train/weights/best.pt`. Detection output returns an annotated image, crop/weed boxes, counts, confidence, crop ratio, weed ratio, history, stats, recommendations, and crop-health data.
-
-## Hero image
-
-- Expected path: `public/hero-cinematic.png`
-- Keep this as a real image file, not a symlink, so hosted builds can serve it reliably.
-
-HUD overlays are drawn in React on top.
-
-## Build
+Frontend:
 
 ```bash
-npm run build
-npm run preview
+cd frontend
+npm ci
+VITE_API_BASE_URL=http://127.0.0.1:5004 npm run dev
 ```
 
-## Note
+Open the Vite URL, usually `http://127.0.0.1:5173`.
 
-If `npm install` fails with **ENOSPC**, free disk space and retry.
+## Production Deployment
+
+Render backend:
+
+```bash
+git push origin main
+```
+
+Create a Render Blueprint from `render.yaml`, or create a Web Service with:
+
+```bash
+Root Directory: backend
+Build Command: pip install --upgrade pip && pip install -r requirements.txt
+Start Command: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
+Health Check Path: /healthz
+```
+
+Render environment variables:
+
+```bash
+FLASK_DEBUG=0
+DATA_DIR=/tmp/weedicider
+MAX_UPLOAD_MB=16
+ALLOWED_ORIGINS=*
+MODEL_URL=
+MODEL_PATH=
+```
+
+Vercel frontend:
+
+```bash
+git push origin main
+```
+
+Import the same repo in Vercel. `vercel.json` runs:
+
+```bash
+cd frontend && npm ci
+cd frontend && npm run build
+```
+
+Vercel environment variable:
+
+```bash
+VITE_API_BASE_URL=https://your-render-service.onrender.com
+```
+
+After both services are live, you can tighten CORS by changing `ALLOWED_ORIGINS` from `*` to the exact Vercel URL.
+
+## Model Deployment Note
+
+The repository ignores `*.pt` files, so Render will not receive local YOLO weights automatically. Set `MODEL_URL` to a hosted `.pt` file to enable real YOLO inference. If no model is available, the API remains online in deterministic demo mode so the deployed app still renders and all routes work.
