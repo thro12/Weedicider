@@ -1,6 +1,6 @@
 # WeedICider
 
-Production-ready React/Vite frontend and Flask API for crop/weed detection.
+Production-ready React/Vite frontend with same-origin Vercel serverless API routes. A Flask API is also included for Render if you want full YOLO `.pt` inference later.
 
 ## Folder Structure
 
@@ -10,6 +10,7 @@ Production-ready React/Vite frontend and Flask API for crop/weed detection.
 │   ├── public/        # Static images and sample dataset manifest
 │   ├── src/           # UI, routing, API client
 │   └── package.json
+├── api/               # Vercel serverless API routes served at /api/*
 ├── backend/           # Flask API for Render
 │   ├── app.py
 │   ├── requirements.txt
@@ -43,6 +44,28 @@ Open the Vite URL, usually `http://127.0.0.1:5173`.
 
 ## Production Deployment
 
+Vercel frontend and serverless API:
+
+```bash
+git push origin main
+```
+
+The deployed app uses same-origin API routes by default, so `VITE_API_BASE_URL` can be left blank.
+
+Current production URL:
+
+```text
+https://weedicider.vercel.app
+```
+
+Current same-origin backend health endpoint:
+
+```text
+https://weedicider.vercel.app/api/backend-status
+```
+
+## Optional Render Backend
+
 Render backend:
 
 ```bash
@@ -69,7 +92,7 @@ MODEL_URL=
 MODEL_PATH=
 ```
 
-Vercel frontend:
+Vercel frontend with external Render backend:
 
 ```bash
 git push origin main
@@ -82,7 +105,7 @@ cd frontend && npm ci
 cd frontend && npm run build
 ```
 
-Vercel environment variable:
+Only set this Vercel environment variable if you want the frontend to use Render instead of the same-origin Vercel API:
 
 ```bash
 VITE_API_BASE_URL=https://your-render-service.onrender.com
