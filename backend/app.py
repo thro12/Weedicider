@@ -35,6 +35,7 @@ MODEL_PATH_ENV = os.environ.get("MODEL_PATH")
 MODEL_URL = os.environ.get("MODEL_URL")
 MODEL_CANDIDATES = [
     Path(MODEL_PATH_ENV).expanduser().resolve() if MODEL_PATH_ENV else None,
+    ROOT / "model.pt",
     ROOT / "Combined_Dataset_Yolov8_best.pt",
     REPO_ROOT / "Combined_Dataset_Yolov8_best.pt",
     ROOT / "detect" / "train2" / "weights" / "best.pt",
