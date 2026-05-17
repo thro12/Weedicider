@@ -19,6 +19,7 @@ frontend/dist-ssr
 __pycache__/
 *.py[cod]
 *.pt
+!backend/model.pt
 /detect/
 /train/
 /valid/

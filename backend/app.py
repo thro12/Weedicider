@@ -21,10 +21,13 @@ DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(DEFAULT_DATA_DIR / "matplotlib"))
 os.environ.setdefault("YOLO_CONFIG_DIR", str(DEFAULT_DATA_DIR / "ultralytics"))
 
+YOLO_IMPORT_ERROR: str | None = None
+
 try:
     from ultralytics import YOLO
-except Exception:  # pragma: no cover - production can still run in demo mode without torch/ultralytics
+except Exception as exc:  # pragma: no cover - production can still run in demo mode without torch/ultralytics
     YOLO = None
+    YOLO_IMPORT_ERROR = repr(exc)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -79,7 +82,7 @@ def load_model() -> Any | None:
     if model is not None:
         return model
     if YOLO is None:
-        model_error = "ultralytics is not available"
+        model_error = f"ultralytics is not available: {YOLO_IMPORT_ERROR}"
         return None
 
     if MODEL_URL and not MODEL_DOWNLOAD_PATH.exists():
