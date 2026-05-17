@@ -16,6 +16,11 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from PIL import Image, ImageDraw, ImageFont
 
+DEFAULT_DATA_DIR = Path(os.environ.get("DATA_DIR", Path(__file__).resolve().parent / "runtime")).resolve()
+DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(DEFAULT_DATA_DIR / "matplotlib"))
+os.environ.setdefault("YOLO_CONFIG_DIR", str(DEFAULT_DATA_DIR / "ultralytics"))
+
 try:
     from ultralytics import YOLO
 except Exception:  # pragma: no cover - production can still run in demo mode without torch/ultralytics
@@ -24,7 +29,7 @@ except Exception:  # pragma: no cover - production can still run in demo mode wi
 
 ROOT = Path(__file__).resolve().parent
 REPO_ROOT = ROOT.parent
-DATA_DIR = Path(os.environ.get("DATA_DIR", ROOT / "runtime")).resolve()
+DATA_DIR = DEFAULT_DATA_DIR
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_PATH_ENV = os.environ.get("MODEL_PATH")
 MODEL_URL = os.environ.get("MODEL_URL")
@@ -593,4 +598,5 @@ if __name__ == "__main__":
     load_model()
     debug = os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
     port = int(os.environ.get("PORT", "5004"))
-    app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=False)
+    host = os.environ.get("HOST", "127.0.0.1")
+    app.run(host=host, port=port, debug=debug, use_reloader=False)
